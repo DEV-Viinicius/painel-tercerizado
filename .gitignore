@@ -1,0 +1,16 @@
+# gerados pela compilacao (publicar.py)
+build/
+dist/
+painel.spec
+__pycache__/
+*.pyc
+
+# bytecode do exe antigo, mantido so na maquina local
+_original/
+
+# dados reais e planilhas (ficam no Y:, nunca no repositorio)
+dados.json
+dados.json.lock
+*.xlsx
+*.rar
+*.zip

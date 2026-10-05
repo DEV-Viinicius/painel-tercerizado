@@ -1,0 +1,111 @@
+PAINEL DE ATENDIMENTOS - COMO USAR
+==================================
+
+COMO ABRIR
+----------
+Abra no navegador DESTE PC:  http://localhost:8000
+(ou use o atalho "Painel de Atendimentos" na Area de Trabalho)
+
+Os dados ficam na pasta de rede e sao COMPARTILHADOS entre os PCs.
+Cada PC abre o seu proprio Painel e enxerga os mesmos dados.
+Ate 3 pessoas podem mexer ao mesmo tempo.
+
+COMO FECHAR
+-----------
+Para ENCERRAR o painel, use o atalho "Parar Painel".
+(pode deixar aberto o dia todo; ele nao atrapalha)
+
+
+==================================================
+COMO USAR O PAINEL - O QUE CADA BOTAO FAZ
+==================================================
+
+PRIMEIRO PASSO
+--------------
+- Escolha o ESTADO (UF) na lista da esquerda. O painel mostra os
+  tecnicos e os equipamentos daquele estado.
+
+
+BOTOES DA BARRA DE CIMA
+-----------------------
+
+[ Importar Excel (series) ]
+   Atualiza a lista de EQUIPAMENTOS a partir de uma planilha Excel
+   (.xls ou .xlsx). Ao clicar, escolha o arquivo e UM dos 3 modos:
+
+   * SINCRONIZAR (e o que ja vem marcado - use este no dia a dia)
+                    O numero de SERIE e unico: o arquivo manda onde
+                    cada equipamento esta. Para cada serie da planilha:
+                      - se ela ja esta no painel no MESMO estado, na
+                        MESMA cidade e no MESMO cliente -> nao mexe;
+                      - se ela aparece em OUTRO estado, OUTRA cidade
+                        ou OUTRO cliente -> ela SAI de onde estava e
+                        vai para o lugar do arquivo (nao duplica);
+                      - se ela nao existe no painel -> entra;
+                      - serie que esta no painel e NAO veio no arquivo
+                        -> e REMOVIDA.
+                    Ao terminar aparece um resumo mostrando quantas
+                    ficaram iguais, quais MUDARAM DE LUGAR (de onde
+                    para onde), quais entraram e quais sairam.
+                    Campo em branco na planilha NAO apaga o que ja
+                    estava preenchido no painel (o que foi digitado
+                    a mao continua la).
+
+   * SUBSTITUIR  -> troca TODA a lista atual pela do arquivo.
+                    O que NAO estiver no arquivo e REMOVIDO.
+                    >> Use este quando exportar a lista COMPLETA e
+                       atual do parque. E o ideal para parque que
+                       muda muito: entradas e saidas de uma vez so.
+                    (pede confirmacao antes, pois apaga a lista atual)
+
+   * ADICIONAR/ATUALIZAR (merge) -> so acrescenta series novas e
+                    atualiza as que ja existem (compara pela SERIE).
+                    NAO remove nada.
+                    >> Use quando tem so uma parte da lista (ex.: os
+                       equipamentos novos). Atencao: o que SAIU do
+                       parque continua no painel; teria que apagar na mao.
+
+   A planilha precisa ter na 1a linha os titulos das colunas.
+   Reconhecidas (a ordem nao importa):
+     Serie (OBRIGATORIA), Modelo, UF/Estado, Cidade,
+     Departamento, Fabricante, Cliente.
+   Linhas sem numero de serie sao ignoradas.
+
+[ Restaurar da planilha ]
+   CUIDADO: descarta TODAS as inclusoes e edicoes feitas no painel
+   e volta aos dados originais das planilhas. Pede confirmacao.
+   Use so se quiser "zerar" e recomecar dos dados de origem.
+
+[ Atualizar e salvar nas planilhas ]
+   Grava os dados atuais do painel de volta nas planilhas .xlsx da
+   pasta de rede (mantem as planilhas em dia com o painel).
+
+
+FILTROS (para achar mais rapido)
+--------------------------------
+[ Cidade: todas ]  -> filtra por cidade; pode marcar varias de uma vez.
+Clique no TITULO de uma coluna (com a setinha) -> filtra por aquela coluna.
+[ Salvar filtro ]  -> guarda a combinacao de filtros atual para reusar depois.
+[ (lixeira ao lado) ] -> exclui o filtro salvo que estiver selecionado.
+
+
+LISTAS DE TECNICOS E EQUIPAMENTOS
+---------------------------------
+[ Adicionar tecnico ] / [ Adicionar equipamento ]
+   Abre uma janela para cadastrar um novo.
+
+Em cada linha:
+   [ Editar ]  -> altera os dados daquele item.
+   [ Excluir ] -> remove aquele item (use para tirar 1 equipamento
+                  que saiu, sem precisar reimportar tudo).
+
+Nas janelas de cadastro: [ Salvar ] confirma / [ Cancelar ] fecha sem salvar.
+
+
+==================================================
+DICA para parque que muda muito (rotativo)
+==================================================
+O jeito mais simples: exporte do seu sistema a lista COMPLETA e atual
+dos equipamentos, e importe com o modo SUBSTITUIR. Assim o painel fica
+sempre igual ao seu sistema, sem precisar caçar item que saiu.
+Para mexer em 1 item so, use Editar/Excluir/Adicionar direto na lista.
