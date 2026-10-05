@@ -43,6 +43,12 @@ Y:\DOCUMENTACOES E TUTORIAIS\Projetos de Setores\Tercerizado\
    isolada e ninguém vê o que ela digita, sem nenhum aviso na tela. É o que
    acontece com quem não tem o `Y:` mapeado.
 
+Se nessa pasta não houver **nem** o `dados.json` **nem** as duas planilhas de
+origem, o painel abre com a base vazia (antes ele simplesmente morria, e como o
+`.exe` é `--noconsole` não aparecia nada na tela). Nesse caso ele **não grava**
+um `dados.json` novo: assim, quando o `Y:` voltar, o arquivo de verdade ainda é
+encontrado na abertura seguinte.
+
 Como três pessoas podem mexer juntas, antes de gravar o programa cria um
 `dados.json.lock` e espera se outro PC estiver gravando. Isso protege a
 **gravação**; não protege a **edição**: se dois abrirem a mesma ficha, quem
@@ -159,7 +165,7 @@ O que a maquina precisa ter:
 |---|---|---|
 | Python 3.14 | rodar e compilar | nada funciona |
 | `pip install -r requirements.txt` | openpyxl e xlrd (planilhas) + PyInstaller (o .exe) | `ModuleNotFoundError` ao abrir |
-| `Y:` mapeado, ou acesso a `\\192.168.0.5\Tecnologia` | ler e gravar o `dados.json` da equipe | **o painel abre numa base vazia e isolada, sem nenhum aviso na tela** |
+| `Y:` mapeado, ou acesso a `\\192.168.0.5\Tecnologia` | ler e gravar o `dados.json` da equipe | **o painel abre numa base VAZIA e isolada**; avisa no console, mas o `.exe` e `--noconsole` e nao mostra o aviso |
 | WinRAR | so para o `publicar.py` montar o `.rar` | o `publicar.py` para com aviso; o `--teste` ainda gera o `.exe` |
 
 O `dados.json`, as duas planilhas e o `LOGO SOLIVETTI.jpg` **nao estao no
@@ -173,6 +179,10 @@ Para desenvolver sem encostar na base real, use o `PAINEL_DADOS` (veja
 
 ## Histórico
 
+- **05/10/2026** — código publicado no GitHub (repositório privado
+  `DEV-Viinicius/painel-tercerizado`). Tirado o caminho fixo do usuário
+  `suporte06` do `publicar.py`; criado o `requirements.txt`; sem `dados.json`
+  nem planilhas o painel agora abre vazio em vez de morrer calado.
 - **21/09/2026 (tarde)** — criada a regra da guia `--` (1.815 equipamentos
   migrados); removidos os botões "Baixar técnicos/equipamentos (CSV)", que
   exportavam colunas inexistentes (`cnpj`, `valorUnit`) e saíam vazias; a

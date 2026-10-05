@@ -127,7 +127,19 @@ def carregar_dados():
         _seq[0] = max(_seq[0], maior)
         d.setdefault('filtros', [])
         return d
-    d = construir_seed()
+    try:
+        d = construir_seed()
+    except FileNotFoundError as e:
+        # Nao existe dados.json e as planilhas de origem tambem nao estao ai:
+        # tipicamente um PC sem o Y: mapeado. Antes isso derrubava o programa, e
+        # como o .exe e --noconsole a pessoa nao via nada na tela. Agora abre uma
+        # base VAZIA e nao grava nada: se o Y: voltar, o dados.json de verdade
+        # ainda sera encontrado na proxima abertura.
+        print(f'AVISO: nao achei o dados.json nem as planilhas de origem em:')
+        print(f'       {PASTA}')
+        print(f'       (faltando: {os.path.basename(e.filename or "")})')
+        print(f'AVISO: abrindo uma base VAZIA, visivel so neste PC.')
+        return {'tecnicos': {}, 'equipamentos': [], 'filtros': []}
     salvar_dados(d)
     return d
 
