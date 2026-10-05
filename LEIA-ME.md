@@ -140,6 +140,37 @@ vai-e-vem eterno.
 
 ---
 
+## Rodar em outro PC (clone do GitHub)
+
+Para a **equipe** nada muda: continua sendo baixar o `.rar` do `Y:`, extrair e
+rodar o `painel.exe` (veja o `COMO ACESSAR.txt`). Esta secao e para quem vai
+mexer no codigo e compilar em outra maquina.
+
+```
+git clone https://github.com/DEV-Viinicius/painel-tercerizado.git
+cd painel-tercerizado
+pip install -r requirements.txt
+python servidor.py
+```
+
+O que a maquina precisa ter:
+
+| Precisa | Para que | Se faltar |
+|---|---|---|
+| Python 3.14 | rodar e compilar | nada funciona |
+| `pip install -r requirements.txt` | openpyxl e xlrd (planilhas) + PyInstaller (o .exe) | `ModuleNotFoundError` ao abrir |
+| `Y:` mapeado, ou acesso a `\\192.168.0.5\Tecnologia` | ler e gravar o `dados.json` da equipe | **o painel abre numa base vazia e isolada, sem nenhum aviso na tela** |
+| WinRAR | so para o `publicar.py` montar o `.rar` | o `publicar.py` para com aviso; o `--teste` ainda gera o `.exe` |
+
+O `dados.json`, as duas planilhas e o `LOGO SOLIVETTI.jpg` **nao estao no
+repositorio** - eles moram no `Y:` e tem dados de clientes. Clone sem a rede
+mapeada da um painel em branco.
+
+Para desenvolver sem encostar na base real, use o `PAINEL_DADOS` (veja
+"Testar sem encostar na rede", acima).
+
+---
+
 ## Histórico
 
 - **21/09/2026 (tarde)** — criada a regra da guia `--` (1.815 equipamentos

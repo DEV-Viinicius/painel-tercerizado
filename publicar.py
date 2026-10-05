@@ -21,7 +21,10 @@ from datetime import date
 PASTA = os.path.dirname(os.path.abspath(__file__))
 REDE = r'Y:\DOCUMENTACOES E TUTORIAIS\Projetos de Setores\Tercerizado'
 REDE_UNC = r'\\192.168.0.5\Tecnologia\DOCUMENTACOES E TUTORIAIS\Projetos de Setores\Tercerizado'
-EXE_LOCAL = r'C:\Users\suporte06\Desktop\TERCERIZADO\painel.exe'
+# Copia de cortesia na propria maquina. Em outro PC o caminho muda junto com o
+# usuario; a copia so acontece se a pasta ja existir (veja o final do main()).
+EXE_LOCAL = os.environ.get('PAINEL_EXE_LOCAL') or os.path.join(
+    os.path.expanduser('~'), 'Desktop', 'TERCERIZADO', 'painel.exe')
 PACOTE = 'PainelAtendimentos.rar'
 RARS = (r'C:\Program Files\WinRAR\rar.exe', r'C:\Program Files (x86)\WinRAR\rar.exe')
 TESTE = '--teste' in sys.argv
@@ -31,7 +34,7 @@ def achar_rar():
     for c in RARS:
         if os.path.exists(c):
             return c
-    return None
+    return shutil.which('rar')  # WinRAR em outro lugar, mas visivel no PATH
 
 
 def passo(txt):
@@ -70,7 +73,7 @@ def main():
         print('\nNao achei o WinRAR (rar.exe) nestes caminhos:')
         for c in RARS:
             print('  ', c)
-        print('Instale o WinRAR ou ajuste RARS no topo deste arquivo.')
+        print('Instale o WinRAR, deixe o rar.exe no PATH ou ajuste RARS no topo deste arquivo.')
         return 1
 
     passo('Gerando pagina.py a partir do painel.html')
