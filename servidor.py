@@ -585,6 +585,7 @@ class Handler(BaseHTTPRequestHandler):
                     for k, v in _ch.SITUACOES.items()
                 ]
                 resp['_trilha'] = _ch.TRILHA
+                resp['_exige'] = {k: v[0] for k, v in _ch.EXIGE.items()}
                 self._envia(json.dumps(resp, ensure_ascii=False))
             return
         self._envia('Nao encontrado', 'text/plain', 404)
@@ -739,6 +740,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(
                         f'O chamado esta em «{de}» e nao pode ir direto para «{para}». '
                         f'Daqui so da para seguir para: {saidas or "nenhum passo"}.')
+                falta = _ch.falta_para(sit_depois, novo)
+                if falta:
+                    raise ValueError(
+                        f'Para marcar «{_ch.SITUACOES[sit_depois][0]}» é preciso informar {falta}.')
                 de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
                 para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
                 _ch.anotar(novo, f'{de} → {para}', quem=quem)

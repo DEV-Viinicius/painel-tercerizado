@@ -76,6 +76,22 @@ TRANSICOES = {
     ],
 }
 
+# Campos que precisam estar preenchidos para ENTRAR num passo.
+# passo -> (campo, como chamar o campo na mensagem de erro)
+EXIGE = {
+    # Peca enviada sem rastreio e peca que ninguem sabe onde esta.
+    'peca_enviada': ('rastreio', 'o código de rastreio'),
+}
+
+
+def falta_para(para, ch):
+    """Nome do campo obrigatorio que esta vazio para ir ao passo `para`, ou None."""
+    campo, nome = EXIGE.get(para, (None, None))
+    if campo and not str(ch.get(campo) or '').strip():
+        return nome
+    return None
+
+
 # Cancelar vale em qualquer etapa que ainda esteja na sua mao: equipamento que
 # vai ser substituido ou retirado nao percorre o fluxo ate o fim.
 CANCELAVEIS = [k for k in TRILHA if k != FINAL]

@@ -385,6 +385,8 @@ PAGINA = r"""<!DOCTYPE html>
   <div class="corpo">
     <p class="de-para" id="pDePara"></p>
     <div class="destinos" id="pDestinos"></div>
+    <div class="campo" id="pCampoRastreio" style="display:none"><label>Código de rastreio *</label>
+      <input type="text" id="pRastreio" placeholder="Ex.: AD123456789BR"></div>
     <div class="campo"><label>Seu nome *</label><input type="text" id="pNome" placeholder="Quem está registrando"></div>
     <div class="campo"><label>O que foi feito *</label>
       <textarea id="pTexto" placeholder="Ex.: liguei para o cliente, confirmou que a impressora voltou a imprimir"></textarea></div>
@@ -416,6 +418,7 @@ async function carregar(){
   TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[];
   CHAM = d.chamados||[]; if(d._situacoes) SITS = d._situacoes;
   if(d._trilha) TRILHA = d._trilha;
+  if(d._exige) EXIGE = d._exige;
 }
 async function api(url, body){
   try {
@@ -740,7 +743,7 @@ fSalvos.addEventListener('change', ()=>{
    tem: data de abertura, contador de dias parado, situacao de lista fixa e
    historico (cada andamento vira uma linha, em vez de apagar o anterior).
    ========================================================================= */
-let CHAM = [], SITS = [], TRILHA = [], chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
+let CHAM = [], SITS = [], TRILHA = [], EXIGE = {}, chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
 const sitInfo = k => SITS.find(s => s.chave === k) || { rotulo:k||'?', cor:'#6b7a90', aberta:true };
 const ehAberta = k => !!sitInfo(k).aberta;
 
@@ -983,6 +986,14 @@ function abrirPasso(c, destinos){
       '<label><input type="radio" name="pDest" value="' + d.para + '"' + (i===0?' checked':'') + '>' +
       '<span>' + esc(d.rotulo) + '<br><small style="color:var(--muted)">vai para: ' + esc(sitInfo(d.para).rotulo) + '</small></span></label>').join('');
   }
+  $('pRastreio').value = c.rastreio || '';
+  const atualizaExigencia = () => {
+    const para = destinos.length === 1 ? destinos[0].para
+               : (document.querySelector('input[name=pDest]:checked') || {}).value;
+    $('pCampoRastreio').style.display = EXIGE[para] === 'rastreio' ? '' : 'none';
+  };
+  $('pDestinos').querySelectorAll('input').forEach(r => r.onchange = atualizaExigencia);
+  atualizaExigencia();
   $('pNome').value = nomeLembrado();
   $('pTexto').value = '';
   ovPasso.classList.add('on');
@@ -999,11 +1010,16 @@ $('pConfirmar').onclick = async () => {
   let para = pDestinos.length === 1 ? pDestinos[0].para
            : (document.querySelector('input[name=pDest]:checked') || {}).value;
   if(!para){ alert('Escolha o que aconteceu.'); return; }
+  const rastreio = $('pRastreio').value.trim();
+  if(EXIGE[para] === 'rastreio' && !rastreio){
+    alert('Para marcar \u00abPe\u00e7a enviada\u00bb informe o c\u00f3digo de rastreio.'); $('pRastreio').focus(); return;
+  }
   const base = ovCham.classList.contains('on')
     ? camposDoForm()
     : { os:c.os, cliente:c.cliente, cidade:c.cidade, uf:c.uf, parceiro:c.parceiro,
         aberto_em:c.aberto_em, pedido:c.pedido, rastreio:c.rastreio, obs:c.obs };
   const item = Object.assign(base, {situacao: para});
+  if(EXIGE[para] === 'rastreio') item.rastreio = rastreio;
   if(!item.os){ alert('Informe o n\u00famero da O.S.'); return; }
   if(!item.cliente){ alert('Informe o cliente.'); return; }
   lembrarNome(nome);
