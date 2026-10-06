@@ -696,6 +696,8 @@ class Handler(BaseHTTPRequestHandler):
         op = req.get('op')
         lista = DADOS.setdefault('chamados', [])
         hoje = time.strftime('%Y-%m-%d')
+        # Quem esta registrando: a tela pede o nome na caixa de andamento.
+        quem = (str(req.get('quem') or '').strip() or 'painel')[:60]
 
         if op == 'add':
             item = dict(req['item'])
@@ -708,9 +710,9 @@ class Handler(BaseHTTPRequestHandler):
                 item['aberto_em'] = hoje
             item['fechado_em'] = ''
             item['historico'] = []
-            _ch.anotar(item, f'Chamado aberto em «{_ch.SITUACOES[_ch.SIT_PADRAO][0]}»')
+            _ch.anotar(item, f'Chamado aberto em «{_ch.SITUACOES[_ch.SIT_PADRAO][0]}»', quem=quem)
             if item.get('obs'):
-                _ch.anotar(item, item['obs'])
+                _ch.anotar(item, item['obs'], quem=quem)
             lista.append(item)
 
         elif op == 'update':
@@ -739,7 +741,7 @@ class Handler(BaseHTTPRequestHandler):
                         f'Daqui so da para seguir para: {saidas or "nenhum passo"}.')
                 de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
                 para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
-                _ch.anotar(novo, f'{de} → {para}')
+                _ch.anotar(novo, f'{de} → {para}', quem=quem)
                 # Encerrou agora: marca a data. Reabriu: limpa, senao o contador
                 # de dias congelaria na data do encerramento antigo.
                 if sit_depois not in _ch.ABERTAS:
@@ -749,7 +751,7 @@ class Handler(BaseHTTPRequestHandler):
 
             nota = (req.get('nota') or '').strip()
             if nota:
-                _ch.anotar(novo, nota)
+                _ch.anotar(novo, nota, quem=quem)
 
             for i, x in enumerate(lista):
                 if x.get('id') == _id:
@@ -761,7 +763,7 @@ class Handler(BaseHTTPRequestHandler):
             _id, texto = req['id'], (req.get('texto') or '').strip()
             ch = next((x for x in lista if x.get('id') == _id), None)
             if ch is not None and texto:
-                _ch.anotar(ch, texto)
+                _ch.anotar(ch, texto, quem=quem)
 
         elif op == 'delete':
             _id = req['id']

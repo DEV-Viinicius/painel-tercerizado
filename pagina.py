@@ -190,6 +190,21 @@ PAGINA = r"""<!DOCTYPE html>
   .btn-passo.secundario { background:#fff; color:var(--azul); }
   .btn-passo.perigo { background:#fff; color:var(--vermelho); border-color:#e8b4ae; }
   .passos-nota { font-size:12px; color:var(--muted); margin:2px 0 0; }
+
+  .btn-avancar { display:block; width:100%; border:0; background:var(--verde); color:#fff; border-radius:10px;
+                 padding:14px 16px; font-size:15px; font-weight:700; font-family:inherit; cursor:pointer; transition:.12s; }
+  .btn-avancar:hover { filter:brightness(1.08); }
+  .btn-avancar .prox { display:block; font-size:12.5px; font-weight:400; opacity:.9; margin-top:3px; }
+  .link-cancelar { display:block; text-align:center; margin-top:10px; font-size:12.5px; color:var(--vermelho);
+                   cursor:pointer; text-decoration:underline; background:none; border:0; font-family:inherit; width:100%; }
+  .destinos label { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #cfd8e3;
+                    border-radius:8px; margin-bottom:8px; cursor:pointer; font-size:14px; background:#fff; }
+  .destinos label:hover { border-color:var(--azul2); }
+  .destinos input { margin-top:3px; }
+  .de-para { font-size:13.5px; color:var(--muted); margin:0 0 12px; }
+  .de-para b { color:var(--txt); }
+  .hist-quem { background:#eef2f7; color:var(--azul); border-radius:10px; padding:1px 8px; font-size:11.5px;
+               font-weight:600; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -330,8 +345,6 @@ PAGINA = r"""<!DOCTYPE html>
     </div>
     <div class="campo"><label>Código de rastreio</label><input type="text" id="cRastreio"></div>
     <div class="campo"><label>Observação</label><textarea id="cObs"></textarea></div>
-    <div class="campo" id="cCampoNota"><label>Observação deste andamento</label>
-      <textarea id="cNota" placeholder="Ex.: peça despachada pelos Correios, código AD123..."></textarea></div>
     <div class="passos-box" id="cPassos"></div>
     <div id="cHist"></div>
   </div>
@@ -359,6 +372,19 @@ PAGINA = r"""<!DOCTYPE html>
   </div>
   <div class="rodape"><button class="cancelar" id="impChCancelar">Cancelar</button>
     <button class="salvar" id="impChImportar">Importar</button></div>
+</div></div>
+
+<div class="overlay" id="ovPasso"><div class="modal" style="max-width:560px">
+  <h3 id="pTitulo">Registrar andamento</h3>
+  <div class="corpo">
+    <p class="de-para" id="pDePara"></p>
+    <div class="destinos" id="pDestinos"></div>
+    <div class="campo"><label>Seu nome *</label><input type="text" id="pNome" placeholder="Quem está registrando"></div>
+    <div class="campo"><label>O que foi feito *</label>
+      <textarea id="pTexto" placeholder="Ex.: liguei para o cliente, confirmou que a impressora voltou a imprimir"></textarea></div>
+  </div>
+  <div class="rodape"><button class="cancelar" id="pCancelar">Voltar</button>
+    <button class="salvar" id="pConfirmar">Confirmar</button></div>
 </div></div>
 
 <div id="status"></div>
@@ -887,25 +913,78 @@ function histHTML(c){
   if(!h.length) return '';
   return '<div class="hist"><label style="font-size:13px;font-weight:600;color:var(--muted)">📜 Histórico</label>' +
     h.slice().reverse().map(x =>
-      '<div class="hist-item"><span class="hist-em">' + esc(x.em) + '</span><span>' + esc(x.texto) + '</span></div>').join('') +
+      '<div class="hist-item"><span class="hist-em">' + esc(x.em) + '</span>' +
+      (x.quem && x.quem !== 'painel' ? '<span class="hist-quem">' + esc(x.quem) + '</span>' : '') +
+      '<span>' + esc(x.texto) + '</span></div>').join('') +
     '</div>';
 }
 
 function passosHTML(c){
-  // So os caminhos que o processo permite. Quem decide de verdade e o
-  // servidor: aqui e so o convite.
-  const si = sitInfo(c.situacao);
-  const ps = si.proximos || [];
-  if(!ps.length) return '<label>Pr\u00f3ximo passo</label><p class="passos-nota">Este chamado chegou ao fim do fluxo.</p>';
-  return '<label>Pr\u00f3ximo passo</label>' + ps.map(x => {
-    const cancel = x.para === 'cancelado';
-    const voltar = !cancel && TRILHA.indexOf(x.para) <= TRILHA.indexOf(c.situacao);
-    const cls = cancel ? 'perigo' : (voltar ? 'secundario' : '');
-    return '<button type="button" class="btn-passo ' + cls + '" data-para="' + x.para + '">' +
-           esc(x.rotulo) + '<span class="seta">\u2192</span></button>';
-  }).join('') +
-  '<p class="passos-nota">O que voc\u00ea escrever acima entra no hist\u00f3rico junto com a mudan\u00e7a.</p>';
+  // Um botao so. Para onde ele leva, e o que foi feito, a pessoa diz na
+  // caixa que abre em seguida. Quem decide se pode e o servidor.
+  const ps = (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado');
+  const podeCancelar = (sitInfo(c.situacao).proximos || []).some(x => x.para === 'cancelado');
+  let html = '';
+  if(!ps.length){
+    html = '<p class="passos-nota">Este chamado chegou ao fim do fluxo.</p>';
+  } else {
+    const reabrir = ps.length === 1 && ps[0].para === TRILHA[0] && !ehAberta(c.situacao);
+    const titulo = reabrir ? 'Reabrir chamado' : 'Avan\u00e7ar para a pr\u00f3xima etapa \u2192';
+    const sub = ps.length === 1 ? sitInfo(ps[0].para).rotulo : 'a caixa pergunta qual caminho';
+    html = '<button type="button" class="btn-avancar" id="btnAvancar">' + titulo +
+           '<span class="prox">' + esc(sub) + '</span></button>';
+  }
+  if(podeCancelar) html += '<button type="button" class="link-cancelar" id="btnCancelarCh">cancelar este chamado</button>';
+  return html;
 }
+
+/* ---- caixa de andamento: para onde, quem, o que fez ---- */
+const ovPasso = $('ovPasso');
+let pDestinos = [];
+function nomeLembrado(){ try { return localStorage.getItem('painel_nome') || ''; } catch(e){ return ''; } }
+function lembrarNome(n){ try { localStorage.setItem('painel_nome', n); } catch(e){} }
+
+function abrirPasso(c, destinos){
+  pDestinos = destinos;
+  const de = sitInfo(c.situacao).rotulo;
+  if(destinos.length === 1){
+    const d = destinos[0];
+    $('pTitulo').textContent = d.para === 'cancelado' ? 'Cancelar chamado' : 'Registrar andamento';
+    $('pDePara').innerHTML = 'O.S. <b>' + esc(c.os) + '</b> \u2014 de <b>' + esc(de) + '</b> para <b>' + esc(sitInfo(d.para).rotulo) + '</b>';
+    $('pDestinos').innerHTML = '';
+  } else {
+    $('pTitulo').textContent = 'Registrar andamento';
+    $('pDePara').innerHTML = 'O.S. <b>' + esc(c.os) + '</b> est\u00e1 em <b>' + esc(de) + '</b>. O que aconteceu?';
+    $('pDestinos').innerHTML = destinos.map((d, i) =>
+      '<label><input type="radio" name="pDest" value="' + d.para + '"' + (i===0?' checked':'') + '>' +
+      '<span>' + esc(d.rotulo) + '<br><small style="color:var(--muted)">vai para: ' + esc(sitInfo(d.para).rotulo) + '</small></span></label>').join('');
+  }
+  $('pNome').value = nomeLembrado();
+  $('pTexto').value = '';
+  ovPasso.classList.add('on');
+  ($('pNome').value ? $('pTexto') : $('pNome')).focus();
+}
+$('pCancelar').onclick = () => ovPasso.classList.remove('on');
+ovPasso.onclick = e => { if(e.target === ovPasso) ovPasso.classList.remove('on'); };
+$('pConfirmar').onclick = async () => {
+  const c = CHAM.find(x => x.id === cEditId);
+  if(!c) return;
+  const nome = $('pNome').value.trim(), texto = $('pTexto').value.trim();
+  if(!nome){ alert('Diga quem est\u00e1 registrando.'); $('pNome').focus(); return; }
+  if(!texto){ alert('Descreva o que foi feito.'); $('pTexto').focus(); return; }
+  let para = pDestinos.length === 1 ? pDestinos[0].para
+           : (document.querySelector('input[name=pDest]:checked') || {}).value;
+  if(!para){ alert('Escolha o que aconteceu.'); return; }
+  const item = Object.assign(camposDoForm(), {situacao: para});
+  if(!item.os){ alert('Informe o n\u00famero da O.S.'); return; }
+  if(!item.cliente){ alert('Informe o cliente.'); return; }
+  lembrarNome(nome);
+  if(await api('/api/chamado', {op:'update', id:cEditId, item:item, nota:texto, quem:nome})){
+    aviso('\u2714 ' + sitInfo(para).rotulo);
+    ovPasso.classList.remove('on'); ovCham.classList.remove('on');
+    renderCham();
+  }
+};
 
 window.abrirCham = function(id){
   const c = CHAM.find(x => x.id === id);
@@ -918,11 +997,13 @@ window.abrirCham = function(id){
   $('cParceiro').value = c.parceiro || '';
   $('cAberto').value = (c.aberto_em || '').slice(0,10);
   $('cPedido').value = c.pedido || ''; $('cRastreio').value = c.rastreio || '';
-  $('cObs').value = c.obs || ''; $('cNota').value = '';
-  $('cCampoNota').style.display = ''; $('cHist').innerHTML = histHTML(c);
+  $('cObs').value = c.obs || '';
+  $('cHist').innerHTML = histHTML(c);
   $('cPassos').style.display = ''; $('cPassos').innerHTML = passosHTML(c);
-  $('cPassos').querySelectorAll('.btn-passo').forEach(b =>
-    b.onclick = () => avancar(b.dataset.para));
+  const ps = (sitInfo(c.situacao).proximos || []);
+  const bA = $('btnAvancar'), bC = $('btnCancelarCh');
+  if(bA) bA.onclick = () => abrirPasso(c, ps.filter(x => x.para !== 'cancelado'));
+  if(bC) bC.onclick = () => abrirPasso(c, ps.filter(x => x.para === 'cancelado'));
   $('cExcluir').style.display = '';
   ovCham.classList.add('on');
 };
@@ -937,31 +1018,14 @@ function camposDoForm(){
   };
 }
 
-// Avanca o chamado para o passo escolhido, salvando junto o que foi editado.
-async function avancar(para){
-  const c = CHAM.find(x => x.id === cEditId);
-  if(!c) return;
-  const alvo = sitInfo(para).rotulo;
-  if(para === 'cancelado' && !confirm('Cancelar o chamado da O.S. ' + c.os + '?\n\nEle sai do fluxo. D\u00e1 para reabrir depois.')) return;
-  const item = Object.assign(camposDoForm(), {situacao: para});
-  if(!item.os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
-  if(!item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
-  if(await api('/api/chamado', {op:'update', id:cEditId, item:item, nota:$('cNota').value.trim()})){
-    aviso('\u2714 ' + alvo);
-    ovCham.classList.remove('on');
-    renderCham();
-  }
-}
-
 $('btnNovoCham').onclick = () => {
   cEditId = null;
   $('cTitulo').textContent = 'Novo chamado';
-  ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs','cNota'].forEach(i => $(i).value = '');
+  ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs'].forEach(i => $(i).value = '');
   $('cUF').value = '';
   $('cAberto').value = hojeISO();          // chamado novo ja nasce com data
   // Todo chamado comeca no passo 1: nao se cria no meio do processo.
   $('cTrilha').innerHTML = trilhaHTML({situacao: TRILHA[0]});
-  $('cCampoNota').style.display = 'none';
   $('cPassos').style.display = 'none';
   $('cHist').innerHTML = ''; $('cExcluir').style.display = 'none';
   ovCham.classList.add('on'); $('cOS').focus();
@@ -975,7 +1039,7 @@ $('cSalvar').onclick = async () => {
   if(!item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
   // Salvar grava os dados e a observacao; quem muda de passo sao os botoes.
   const body = cEditId
-    ? { op:'update', id:cEditId, item:item, nota: $('cNota').value.trim() }
+    ? { op:'update', id:cEditId, item:item }
     : { op:'add', item:item };
   if(await api('/api/chamado', body)){ ovCham.classList.remove('on'); renderCham(); }
 };
