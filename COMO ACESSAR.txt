@@ -109,3 +109,52 @@ O jeito mais simples: exporte do seu sistema a lista COMPLETA e atual
 dos equipamentos, e importe com o modo SUBSTITUIR. Assim o painel fica
 sempre igual ao seu sistema, sem precisar caçar item que saiu.
 Para mexer em 1 item so, use Editar/Excluir/Adicionar direto na lista.
+
+
+==================================================
+ABA CHAMADOS - ACOMPANHAMENTO DOS TERCEIRIZADOS
+==================================================
+Substitui a planilha do Google. No alto da tela ha duas abas:
+"Equipamentos por estado" (o que ja existia) e "Chamados".
+
+O CHAMADO ANDA POR UM PASSO A PASSO FIXO
+----------------------------------------
+  1. Solicitar filtragem        <- todo chamado novo comeca aqui
+  2. Enviar peca                (quando a filtragem deu certo e precisa de peca)
+  3. Peca enviada               (exige o CODIGO DE RASTREIO)
+  4. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
+                                 resolveu ou nao precisa de peca)
+  5. Atendimento concluido
+  6. Confirmar com o cliente    (se o cliente disser que NAO resolveu,
+                                 volta para o passo 1)
+  7. Gerar pedido de compra
+  8. Enviado ao ADM             <- fim; o chamado sai de "em andamento"
+
+Nao da para pular passo. O painel so oferece o proximo.
+"Cancelar" existe em qualquer passo de 1 a 7 (equipamento que vai ser
+substituido ou retirado). Encerrado ou cancelado so volta com "Reabrir".
+
+BOTOES
+------
+[ Novo chamado ]  -> cadastra um chamado. Ele ja nasce no passo 1, com a
+                     data de hoje. Preencha O.S., cliente, cidade/UF e parceiro.
+
+Em cada linha da tabela:
+[ Avancar -> ]    -> abre a caixa "Registrar andamento". Quando ha dois
+                     caminhos, ela pergunta o que aconteceu. Sempre pede
+                     SEU NOME (fica lembrado) e O QUE FOI FEITO. Tudo isso
+                     vai para o historico do chamado, com data e hora.
+[ lapis ]         -> so para corrigir dados (cliente, rastreio, pedido...).
+                     Dentro dele voce ve o HISTORICO completo.
+
+NO ALTO DA ABA
+--------------
+- Funil com a quantidade de chamados em cada passo. Clique para filtrar.
+- Cartoes: em andamento / parados +15 dias / sem data / encerrados.
+  "Parado ha" fica AMARELO depois de 15 dias e VERMELHO depois de 30.
+- Filtros por estado, parceiro e passo, mais a busca por O.S., cliente,
+  parceiro, rastreio ou pedido.
+
+[ Importar planilha de chamados ]  -> traz chamados de um .xlsx no formato
+   da planilha antiga. Normalmente NAO e preciso: a aba comecou vazia de
+   proposito para a equipe usar do zero.
