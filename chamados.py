@@ -6,8 +6,9 @@ ATENDIMENTOS TERCEIRIZADOS", aba CHAMADOS TERCEIRIZADOS), onde o status era
 texto livre (60 grafias diferentes para 332 chamados) e nao existia data
 nenhuma -- nao dava para saber ha quanto tempo um chamado estava parado.
 
-Aqui a situacao e uma lista fixa, a data de abertura existe, e cada alteracao
-vira uma linha no historico em vez de apagar a anterior.
+Aqui o chamado anda por um PASSO A PASSO fixo: de cada etapa so saem os
+caminhos que o processo real permite, e cada mudanca vira uma linha no
+historico em vez de apagar a anterior.
 
 Nada neste arquivo toca em tecnicos ou equipamentos.
 """
@@ -15,20 +16,86 @@ import re
 import unicodedata
 from datetime import date, datetime
 
-# ---------------------------------------------------------------- situacoes
+# ------------------------------------------------------------------ passos
 
-# chave -> (rotulo na tela, cor, conta como "em aberto"?)
+# chave -> (rotulo na tela, cor, ainda esta na sua mao?)
+# A ordem do dicionario e a ordem da trilha mostrada na tela.
 SITUACOES = {
-    'aberto':          ('Aberto',                      '#6b7a90', True),
-    'enviado':         ('Enviado ao terceirizado',     '#2f6fd0', True),
-    'aguardando_peca': ('Aguardando peça',        '#d08a00', True),
-    'peca_enviada':    ('Peça enviada',           '#8a4fd0', True),
-    'orcamento':       ('Aguardando aprovação', '#c85a00', True),
-    'concluido':       ('Concluído',              '#1f9254', False),
-    'cancelado':       ('Cancelado',                   '#99a3b0', False),
+    'filtragem':    ('Solicitar filtragem',     '#6b7a90', True),
+    'enviar_peca':  ('Enviar peça',             '#d08a00', True),
+    'peca_enviada': ('Peça enviada',            '#8a4fd0', True),
+    'terceirizado': ('Enviado ao terceirizado', '#2f6fd0', True),
+    'concluido':    ('Atendimento concluído',   '#1f9254', True),
+    'confirmar':    ('Confirmar com o cliente', '#0f8f8f', True),
+    'pedido':       ('Gerar pedido de compra',  '#c85a00', True),
+    'adm':          ('Enviado ao ADM',          '#4a5568', False),
+    'cancelado':    ('Cancelado',               '#99a3b0', False),
 }
-SIT_PADRAO = 'aberto'
+
+SIT_PADRAO = 'filtragem'
 ABERTAS = [k for k, v in SITUACOES.items() if v[2]]
+
+# Passos que formam a trilha principal (o cancelado fica fora: e saida lateral).
+TRILHA = ['filtragem', 'enviar_peca', 'peca_enviada', 'terceirizado',
+          'concluido', 'confirmar', 'pedido', 'adm']
+
+FINAL = 'adm'
+
+# De cada passo, PARA ONDE da para ir -- e com que palavras o botao convida.
+# O que nao esta aqui o servidor recusa: o passo a passo e para valer.
+TRANSICOES = {
+    'filtragem': [
+        ('enviar_peca',  'Filtragem OK — precisa enviar peça'),
+        ('terceirizado', 'Não resolveu / não precisa de peça — enviar ao terceirizado'),
+    ],
+    'enviar_peca': [
+        ('peca_enviada', 'Peça despachada'),
+    ],
+    'peca_enviada': [
+        ('terceirizado', 'Peça chegou — enviar ao terceirizado'),
+    ],
+    'terceirizado': [
+        ('concluido', 'Terceirizado concluiu o atendimento'),
+    ],
+    'concluido': [
+        ('confirmar', 'Ligar para o cliente confirmar'),
+    ],
+    'confirmar': [
+        ('pedido',    'Cliente confirmou — gerar pedido de compra'),
+        ('filtragem', 'Cliente diz que não resolveu — voltar à filtragem'),
+    ],
+    'pedido': [
+        ('adm', 'Pedido enviado ao ADM para pagamento'),
+    ],
+    # Fim da linha e cancelado so saem reabrindo.
+    'adm': [
+        ('filtragem', 'Reabrir chamado'),
+    ],
+    'cancelado': [
+        ('filtragem', 'Reabrir chamado'),
+    ],
+}
+
+# Cancelar vale em qualquer etapa que ainda esteja na sua mao: equipamento que
+# vai ser substituido ou retirado nao percorre o fluxo ate o fim.
+CANCELAVEIS = [k for k in TRILHA if k != FINAL]
+
+
+def pode_ir(de, para):
+    """A mudanca de passo e permitida pelo processo?"""
+    if de == para:
+        return True
+    if para == 'cancelado':
+        return de in CANCELAVEIS
+    return para in [p for p, _ in TRANSICOES.get(de, [])]
+
+
+def proximos(de):
+    """Lista [(passo, texto do botao)] que a tela deve oferecer."""
+    saidas = list(TRANSICOES.get(de, []))
+    if de in CANCELAVEIS:
+        saidas.append(('cancelado', 'Cancelar chamado'))
+    return saidas
 
 
 def _nrm(s):
@@ -42,21 +109,24 @@ def _nrm(s):
 _REGRAS = [
     # Antes de tudo: texto que diz que o atendimento NAO resolveu, mesmo
     # contendo a palavra "atendido". Ex.: "ATENDIDO MAS IMPRESSAO CONTINUA EM BRANCO".
-    (r'SEM SUCESSO|MAS IMPRESSAO|CONTINUA EM BRANCO', 'aberto'),
+    (r'SEM SUCESSO|MAS IMPRESSAO|CONTINUA EM BRANCO', 'filtragem'),
     (r'CANCELAD', 'cancelado'),
-    # "CONCLUIDO - ENVIAR PECA PARA O TECNICO" e "ENVIAR PECA (CHAMADO CONCLUIDO)"
-    # sao conclusoes: por isso concluido vem antes das regras de peca.
+    # Na planilha "CONCLUIDO" era fim de linha -- o chamado ja tinha passado por
+    # tudo, inclusive pedido de compra. Por isso entra no fim do fluxo, e nao em
+    # "atendimento concluido": senao 288 chamados encerrados voltariam para a
+    # fila pedindo confirmacao com o cliente.
     (r'CONCLU|CONLUIDO|FINALIZAD|RESOLVID|ATENDIDO POR|INSTALADO PELO CLIENTE|'
-     r'CHAMADO ATENDIDO|REALIZADO A TROCA', 'concluido'),
-    (r'ORCAMENTO|APROVACAO', 'orcamento'),
-    (r'AGUARDANDO.*PEC|COMPRA DE PECA|CHEGADA DE PEC', 'aguardando_peca'),
+     r'CHAMADO ATENDIDO|REALIZADO A TROCA', 'adm'),
+    # Orcamento/aprovacao e espera para poder mandar a peca.
+    (r'ORCAMENTO|APROVACAO', 'enviar_peca'),
+    (r'AGUARDANDO.*PEC|COMPRA DE PECA|CHEGADA DE PEC', 'enviar_peca'),
     (r'PECA ENVIADA|ENVIAR PECA|PECA NO CLIENTE|PECA PARA', 'peca_enviada'),
-    (r'ENVIADO|ENCAMINHADO|WHATSAPP|EMAIL', 'enviado'),
+    (r'ENVIADO|ENCAMINHADO|WHATSAPP|EMAIL', 'terceirizado'),
 ]
 
 
 def classificar(texto):
-    """Texto livre do status antigo -> uma das situacoes fixas."""
+    """Texto livre do status antigo -> em que passo o chamado entra."""
     t = _nrm(texto)
     if not t:
         return SIT_PADRAO
@@ -137,7 +207,7 @@ def anotar(ch, texto, quem='painel'):
 
 
 def dias_parado(ch, hoje=None):
-    """Dias desde a abertura (ou ate a conclusao). None quando falta a data."""
+    """Dias desde a abertura (ou ate o encerramento). None quando falta a data."""
     ini = (ch.get('aberto_em') or '').strip()
     if not ini:
         return None

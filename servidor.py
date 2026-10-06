@@ -579,9 +579,12 @@ class Handler(BaseHTTPRequestHandler):
                 # propria: a regra mora so no chamados.py.
                 resp = dict(DADOS)
                 resp['_situacoes'] = [
-                    {'chave': k, 'rotulo': v[0], 'cor': v[1], 'aberta': v[2]}
+                    {'chave': k, 'rotulo': v[0], 'cor': v[1], 'aberta': v[2],
+                     'passo': (_ch.TRILHA.index(k) + 1) if k in _ch.TRILHA else 0,
+                     'proximos': [{'para': p, 'rotulo': r} for p, r in _ch.proximos(k)]}
                     for k, v in _ch.SITUACOES.items()
                 ]
+                resp['_trilha'] = _ch.TRILHA
                 self._envia(json.dumps(resp, ensure_ascii=False))
             return
         self._envia('Nao encontrado', 'text/plain', 404)
@@ -697,14 +700,15 @@ class Handler(BaseHTTPRequestHandler):
         if op == 'add':
             item = dict(req['item'])
             item['id'] = novo_id('c')
-            item.setdefault('situacao', _ch.SIT_PADRAO)
+            # Todo chamado comeca no primeiro passo do fluxo. Nao se cria um
+            # chamado no meio do processo: e o passo a passo que vale.
+            item['situacao'] = _ch.SIT_PADRAO
             # Chamado novo ja nasce com data: e justamente o que faltava na planilha.
             if not item.get('aberto_em'):
                 item['aberto_em'] = hoje
+            item['fechado_em'] = ''
             item['historico'] = []
-            if item['situacao'] not in _ch.ABERTAS:
-                item['fechado_em'] = hoje
-            _ch.anotar(item, f"Chamado criado como «{_ch.SITUACOES[item['situacao']][0]}»")
+            _ch.anotar(item, f'Chamado aberto em «{_ch.SITUACOES[_ch.SIT_PADRAO][0]}»')
             if item.get('obs'):
                 _ch.anotar(item, item['obs'])
             lista.append(item)
@@ -723,11 +727,21 @@ class Handler(BaseHTTPRequestHandler):
             sit_depois = novo.get('situacao', sit_antes)
 
             if sit_depois != sit_antes:
+                # O passo a passo e para valer: a tela so oferece os caminhos
+                # certos, mas quem decide e aqui -- senao bastaria um F12 para
+                # furar o processo.
+                if not _ch.pode_ir(sit_antes, sit_depois):
+                    de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
+                    para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
+                    saidas = ', '.join(_ch.SITUACOES[p][0] for p, _ in _ch.proximos(sit_antes))
+                    raise ValueError(
+                        f'O chamado esta em «{de}» e nao pode ir direto para «{para}». '
+                        f'Daqui so da para seguir para: {saidas or "nenhum passo"}.')
                 de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
                 para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
                 _ch.anotar(novo, f'{de} → {para}')
-                # Fechou agora: marca a data. Reabriu: limpa, senao o contador
-                # de dias congelaria na data da conclusao antiga.
+                # Encerrou agora: marca a data. Reabriu: limpa, senao o contador
+                # de dias congelaria na data do encerramento antigo.
                 if sit_depois not in _ch.ABERTAS:
                     novo['fechado_em'] = hoje
                 else:

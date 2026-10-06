@@ -186,11 +186,43 @@ diferentes para 332 chamados), **não existia data nenhuma** — não dava para
 saber se um chamado estava parado há 3 dias ou 3 meses —, a cidade morava
 dentro do nome do cliente, e o filtro escondia linhas.
 
-**O que mudou:**
+### O passo a passo (é regra, não sugestão)
+
+O chamado anda por 8 passos fixos. De cada um só saem os caminhos que o
+processo real permite — e quem recusa o salto é o **servidor**
+(`_ch.pode_ir()` em `_op_chamado`), não a tela; a tela só mostra os botões
+certos. Tudo está em `chamados.py`: `TRILHA` (a ordem), `TRANSICOES` (de onde
+para onde, com o texto de cada botão) e `CANCELAVEIS`.
+
+```
+1. Solicitar filtragem ─┬─ precisa de peça ──► 2. Enviar peça ──► 3. Peça enviada ─┐
+                        └─ não resolveu / não precisa de peça ─────────────────────┤
+                                                                                   ▼
+                                                        4. Enviado ao terceirizado
+                                                                                   ▼
+                                                        5. Atendimento concluído
+                                                                                   ▼
+                                       ┌── não resolveu ── 6. Confirmar com o cliente
+                                       │                                           ▼
+                            volta ao 1 ◄┘                   7. Gerar pedido de compra
+                                                                                   ▼
+                                                        8. Enviado ao ADM  (fim)
+```
+
+- **Cancelar** vale em qualquer passo de 1 a 7 (equipamento que vai ser
+  substituído/retirado não percorre o fluxo). Do 8 e do cancelado só se sai
+  **reabrindo**, que volta ao passo 1.
+- Chamado novo **sempre** nasce no passo 1, com a data de hoje. O servidor
+  ignora qualquer `situacao` enviada no `add`.
+- "Em andamento" = passos 1 a 7. "Encerrado" = passo 8 ou cancelado
+  (`ABERTAS`). Ao encerrar grava `fechado_em`; ao reabrir limpa, senão o
+  contador de dias congelaria.
+- Cada mudança de passo vira uma linha no `historico` ("Enviar peça → Peça
+  enviada"), junto com a observação digitada na hora.
 
 | Na planilha | No painel |
 |---|---|
-| status escrito à mão | `situacao`: lista fixa de 7 (`chamados.py`, dicionário `SITUACOES`) |
+| status escrito à mão | passo do fluxo (lista fixa de 8 + cancelado) |
 | texto novo apagava o anterior | `historico`: cada mudança vira uma linha com data |
 | sem data | `aberto_em` + contador de dias; amarelo após 15 dias, vermelho após 30 |
 | cidade dentro do nome do cliente | campos `cidade` e `uf` próprios |
@@ -205,9 +237,11 @@ Botão **Importar planilha de chamados**, com o `.xlsx` exportado do Google
 (Arquivo > Fazer download > Microsoft Excel). Duas coisas acontecem na leitura:
 
 1. **O status antigo é classificado** por palavra-chave (`classificar()`), na
-   ordem das regras — "CONCLUIDO - ENVIAR PECA PARA O TECNICO" é conclusão, não
-   espera de peça, por isso `concluido` vem antes das regras de peça. O texto
-   original **nunca se perde**: vai para `obs` e para a primeira linha do histórico.
+   ordem das regras. "CONCLUIDO" na planilha era fim de linha (já tinha passado
+   por pedido de compra), então entra no **passo 8**, não no 5 — senão 288
+   chamados encerrados voltariam para a fila pedindo confirmação com o cliente.
+   O texto original **nunca se perde**: vai para `obs` e para a primeira linha
+   do histórico.
 2. **A cidade e a UF são deduzidas do nome do cliente** (`deduzir_local()`),
    cruzando com as cidades que já existem nos equipamentos do painel. Cobre
    cerca de 80%; o resto fica sem estado e o painel avisa na tela.

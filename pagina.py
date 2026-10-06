@@ -157,6 +157,39 @@ PAGINA = r"""<!DOCTYPE html>
   .campo2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .aviso-caixa { background:#fff8e6; border:1px solid #f0d99b; color:#7a5c00; border-radius:8px;
                  padding:10px 12px; font-size:13px; margin:14px 24px 0; }
+
+  /* ---------- funil: quantos chamados em cada passo ---------- */
+  .funil { display:flex; gap:6px; flex-wrap:wrap; padding:16px 24px 0; }
+  .funil-p { background:#fff; border:1px solid var(--linha); border-left:4px solid #999; border-radius:9px;
+             padding:7px 11px; cursor:pointer; font-size:12.5px; display:flex; align-items:center; gap:8px;
+             transition:.12s; box-shadow:0 1px 4px rgba(30,60,90,.05); }
+  .funil-p:hover { border-color:var(--azul2); transform:translateY(-1px); }
+  .funil-p.ativo { background:#eaf2fb; box-shadow:0 0 0 2px var(--azul2) inset; }
+  .funil-p .ord { background:#eef2f7; color:var(--muted); border-radius:50%; width:19px; height:19px;
+                  display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+  .funil-p .qt { font-weight:700; font-size:15px; }
+  .funil-seta { color:#c3ccd8; align-self:center; font-size:13px; }
+
+  /* ---------- trilha dentro do chamado ---------- */
+  .trilha { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+  .trilha-p { flex:1; min-width:64px; text-align:center; font-size:10.5px; padding:5px 3px; border-radius:6px;
+              background:#eef2f7; color:var(--muted); line-height:1.25; }
+  .trilha-p.feito  { background:#dff0e6; color:#1f7a54; }
+  .trilha-p.agora  { background:var(--azul); color:#fff; font-weight:700; }
+  .trilha-p .nq { display:block; font-size:9.5px; opacity:.75; }
+  .trilha-cancel { background:#fde8e6; color:#c0392b; font-weight:700; padding:7px; border-radius:6px;
+                   text-align:center; font-size:12px; margin-bottom:6px; }
+
+  .passos-box { border:1px solid var(--linha); border-radius:10px; padding:12px 14px; background:#f8fbff; margin-top:4px; }
+  .passos-box > label { font-size:13px; font-weight:700; color:var(--txt); display:block; margin-bottom:9px; }
+  .btn-passo { display:block; width:100%; text-align:left; border:1px solid var(--azul2); background:var(--azul2);
+               color:#fff; border-radius:9px; padding:11px 14px; font-size:13.5px; font-family:inherit;
+               cursor:pointer; margin-bottom:7px; transition:.12s; }
+  .btn-passo:hover { filter:brightness(1.1); }
+  .btn-passo .seta { float:right; opacity:.8; }
+  .btn-passo.secundario { background:#fff; color:var(--azul); }
+  .btn-passo.perigo { background:#fff; color:var(--vermelho); border-color:#e8b4ae; }
+  .passos-nota { font-size:12px; color:var(--muted); margin:2px 0 0; }
 </style>
 </head>
 <body>
@@ -209,12 +242,13 @@ PAGINA = r"""<!DOCTYPE html>
 </div><!-- /telaEquip -->
 
 <div class="tela" id="telaCham">
+  <div class="funil" id="chFunil"></div>
   <div class="ch-resumo" id="chResumo"></div>
   <div class="ch-barra">
     <input type="text" id="chBusca" placeholder="🔎 Buscar por OS, cliente, parceiro, rastreio ou pedido...">
     <select id="chUF"><option value="">📍 Todos os estados</option></select>
     <select id="chParceiro"><option value="">🤝 Todos os parceiros</option></select>
-    <select id="chSit"><option value="">◉ Todas as situações</option></select>
+    <select id="chSit"><option value="">◉ Todos os passos</option></select>
     <select id="chOrdem">
       <option value="dias">⏱️ Mais parados primeiro</option>
       <option value="os">Nº da OS</option>
@@ -280,10 +314,8 @@ PAGINA = r"""<!DOCTYPE html>
 <div class="overlay" id="ovCham"><div class="modal" style="max-width:720px">
   <h3 id="cTitulo">Novo chamado</h3>
   <div class="corpo">
-    <div class="campo2">
-      <div class="campo"><label>Nº da O.S. *</label><input type="text" id="cOS"></div>
-      <div class="campo"><label>Situação *</label><select id="cSit"></select></div>
-    </div>
+    <div id="cTrilha"></div>
+    <div class="campo"><label>Nº da O.S. *</label><input type="text" id="cOS"></div>
     <div class="campo"><label>Cliente *</label><input type="text" id="cCliente" list="listaClientes">
       <datalist id="listaClientes"></datalist></div>
     <div class="campo2">
@@ -298,8 +330,9 @@ PAGINA = r"""<!DOCTYPE html>
     </div>
     <div class="campo"><label>Código de rastreio</label><input type="text" id="cRastreio"></div>
     <div class="campo"><label>Observação</label><textarea id="cObs"></textarea></div>
-    <div class="campo" id="cCampoNota"><label>Novo andamento (vai para o histórico)</label>
+    <div class="campo" id="cCampoNota"><label>Observação deste andamento</label>
       <textarea id="cNota" placeholder="Ex.: peça despachada pelos Correios, código AD123..."></textarea></div>
+    <div class="passos-box" id="cPassos"></div>
     <div id="cHist"></div>
   </div>
   <div class="rodape">
@@ -350,6 +383,7 @@ async function carregar(){
   const r = await fetch('/api/dados'); const d = await r.json();
   TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[];
   CHAM = d.chamados||[]; if(d._situacoes) SITS = d._situacoes;
+  if(d._trilha) TRILHA = d._trilha;
 }
 async function api(url, body){
   try {
@@ -674,7 +708,7 @@ fSalvos.addEventListener('change', ()=>{
    tem: data de abertura, contador de dias parado, situacao de lista fixa e
    historico (cada andamento vira uma linha, em vez de apagar o anterior).
    ========================================================================= */
-let CHAM = [], SITS = [], chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
+let CHAM = [], SITS = [], TRILHA = [], chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
 const sitInfo = k => SITS.find(s => s.chave === k) || { rotulo:k||'?', cor:'#6b7a90', aberta:true };
 const ehAberta = k => !!sitInfo(k).aberta;
 
@@ -709,10 +743,9 @@ function chListaBase(){
   let L = CHAM.slice();
   const a = chFiltro.atalho;
   if(a === 'abertos')   L = L.filter(c => ehAberta(c.situacao));
-  if(a === 'peca')      L = L.filter(c => c.situacao === 'aguardando_peca');
   if(a === 'parados')   L = L.filter(c => ehAberta(c.situacao) && (diasParado(c) ?? -1) > 15);
   if(a === 'semdata')   L = L.filter(c => ehAberta(c.situacao) && !c.aberto_em);
-  if(a === 'concluido') L = L.filter(c => !ehAberta(c.situacao));
+  if(a === 'encerrado') L = L.filter(c => !ehAberta(c.situacao));
   if(chFiltro.uf === '__sem')      L = L.filter(c => !c.uf);
   else if(chFiltro.uf)             L = L.filter(c => (c.uf||'') === chFiltro.uf);
   if(chFiltro.parceiro) L = L.filter(c => (c.parceiro||'') === chFiltro.parceiro);
@@ -732,14 +765,34 @@ function chOrdenar(L){
   return L.sort((a,b) => (ehAberta(b.situacao) - ehAberta(a.situacao)) || f(a,b));
 }
 
+function renderFunil(){
+  // Quantos chamados parados em cada passo. E o retrato do processo:
+  // onde a fila esta crescendo, aparece aqui.
+  const cont = {};
+  CHAM.forEach(c => { cont[c.situacao] = (cont[c.situacao]||0) + 1; });
+  const passos = TRILHA.map(k => ({k:k, i:sitInfo(k)}));
+  if(cont['cancelado']) passos.push({k:'cancelado', i:sitInfo('cancelado')});
+  $('chFunil').innerHTML = passos.map((p, n) =>
+    (n > 0 && p.k !== 'cancelado' ? '<span class="funil-seta">\u203a</span>' : '') +
+    '<div class="funil-p' + (chFiltro.sit===p.k?' ativo':'') + '" data-k="' + p.k + '" ' +
+    'style="border-left-color:' + p.i.cor + '" title="' + esc(p.i.rotulo) + '">' +
+    (p.k === 'cancelado' ? '' : '<span class="ord">' + (n+1) + '</span>') +
+    '<span>' + esc(p.i.rotulo) + '</span>' +
+    '<span class="qt" style="color:' + p.i.cor + '">' + (cont[p.k]||0) + '</span></div>').join('');
+  $('chFunil').querySelectorAll('.funil-p').forEach(el => el.onclick = () => {
+    chFiltro.sit = (chFiltro.sit === el.dataset.k) ? '' : el.dataset.k;
+    chFiltro.atalho = '';
+    renderCham();
+  });
+}
+
 function renderResumo(){
   const ab = CHAM.filter(c => ehAberta(c.situacao));
   const cartoes = [
-    { k:'abertos',   n:ab.length,                                              r:'em aberto',            cor:'var(--azul2)' },
-    { k:'peca',      n:CHAM.filter(c => c.situacao==='aguardando_peca').length, r:'aguardando pe\u00e7a',  cor:'#d08a00' },
-    { k:'parados',   n:ab.filter(c => (diasParado(c) ?? -1) > 15).length,       r:'parados +15 dias',     cor:'var(--vermelho)' },
-    { k:'semdata',   n:ab.filter(c => !c.aberto_em).length,                     r:'sem data de abertura', cor:'var(--muted)' },
-    { k:'concluido', n:CHAM.length - ab.length,                                 r:'conclu\u00eddos',       cor:'var(--verde)' },
+    { k:'abertos', n:ab.length,                                        r:'em andamento',         cor:'var(--azul2)' },
+    { k:'parados', n:ab.filter(c => (diasParado(c) ?? -1) > 15).length, r:'parados +15 dias',     cor:'var(--vermelho)' },
+    { k:'semdata', n:ab.filter(c => !c.aberto_em).length,               r:'sem data de abertura', cor:'var(--muted)' },
+    { k:'encerrado', n:CHAM.length - ab.length,                         r:'encerrados',           cor:'var(--verde)' },
   ];
   $('chResumo').innerHTML = cartoes.map(c =>
     '<div class="ch-cartao' + (chFiltro.atalho===c.k?' ativo':'') + '" data-k="' + c.k + '" style="border-left-color:' + c.cor + '">' +
@@ -763,13 +816,14 @@ function popularSelects(){
     '<option value="__sem"' + (chFiltro.uf==='__sem'?' selected':'') + '>\u2014 sem estado \u2014</option>');
   const ps = [...new Set(CHAM.map(c => c.parceiro).filter(Boolean))].sort();
   sel('chParceiro', ps.map(x => ({v:x, t:x})), chFiltro.parceiro);
-  sel('chSit', SITS.map(s => ({v:s.chave, t:s.rotulo})), chFiltro.sit);
+  sel('chSit', SITS.map(s => ({v:s.chave, t:(s.passo ? s.passo + '. ' : '') + s.rotulo})), chFiltro.sit);
   $('listaClientes').innerHTML  = [...new Set(CHAM.map(c=>c.cliente).filter(Boolean))].sort()
                                     .map(x=>'<option value="' + esc(x) + '">').join('');
   $('listaParceiros').innerHTML = ps.map(x=>'<option value="' + esc(x) + '">').join('');
 }
 
 function renderCham(){
+  renderFunil();
   renderResumo();
   popularSelects();
   const L = chOrdenar(chListaBase());
@@ -792,7 +846,8 @@ function renderCham(){
       '<td>' + esc(c.cliente) + (c.obs ? '<div class="ch-sub">' + esc(c.obs.slice(0,70)) + (c.obs.length>70?'\u2026':'') + '</div>' : '') + '</td>' +
       '<td>' + esc(c.cidade||'') + (c.uf ? ' <b>' + esc(c.uf) + '</b>' : '<span class="ch-sub">\u2014</span>') + '</td>' +
       '<td>' + esc(c.parceiro||'\u2014') + '</td>' +
-      '<td><span class="sit" style="background:' + si.cor + '">' + esc(si.rotulo) + '</span></td>' +
+      '<td><span class="sit" style="background:' + si.cor + '">' +
+        (si.passo ? si.passo + '. ' : '') + esc(si.rotulo) + '</span></td>' +
       '<td>' + (dataBR(c.aberto_em) || '<span class="ch-sub">\u2014</span>') + '</td>' +
       '<td class="ch-dias ' + cls + '">' + txt + '</td>' +
       '<td>' + esc(c.rastreio||'') + '</td>' +
@@ -802,7 +857,7 @@ function renderCham(){
   $('chConteudo').innerHTML = alerta +
     '<div class="estado-cab"><h2>Chamados</h2><span class="sub">' + L.length + ' de ' + CHAM.length + ' chamado(s)</span></div>' +
     '<table class="ch-tabela"><thead><tr>' +
-    '<th>O.S.</th><th>Cliente</th><th>Cidade / UF</th><th>Parceiro</th><th>Situa\u00e7\u00e3o</th>' +
+    '<th>O.S.</th><th>Cliente</th><th>Cidade / UF</th><th>Parceiro</th><th>Passo do fluxo</th>' +
     '<th>Aberto em</th><th>Parado h\u00e1</th><th>Rastreio</th><th>Pedido</th><th></th>' +
     '</tr></thead><tbody>' + linhas + '</tbody></table>';
   $('chConteudo').querySelectorAll('tbody tr').forEach(tr =>
@@ -814,41 +869,100 @@ const ovCham = $('ovCham');
 let cEditId = null;
 UFS_BR.forEach(u => $('cUF').insertAdjacentHTML('beforeend', '<option>' + u + '</option>'));
 
-function preencherSits(){
-  $('cSit').innerHTML = SITS.map(s => '<option value="' + s.chave + '">' + esc(s.rotulo) + '</option>').join('');
+function trilhaHTML(c){
+  const atual = c.situacao;
+  if(atual === 'cancelado'){
+    return '<div class="trilha-cancel">\u26d4 Chamado cancelado</div>';
+  }
+  const pos = TRILHA.indexOf(atual);
+  return '<div class="trilha">' + TRILHA.map((k, i) => {
+    const cls = i < pos ? 'feito' : (i === pos ? 'agora' : '');
+    return '<div class="trilha-p ' + cls + '" title="' + esc(sitInfo(k).rotulo) + '">' +
+           '<span class="nq">' + (i+1) + '</span>' + esc(sitInfo(k).rotulo) + '</div>';
+  }).join('') + '</div>';
 }
+
 function histHTML(c){
   const h = (c.historico || []);
   if(!h.length) return '';
-  return '<div class="hist"><label style="font-size:13px;font-weight:600;color:var(--muted)">\ud83d\udcdc Hist\u00f3rico</label>' +
+  return '<div class="hist"><label style="font-size:13px;font-weight:600;color:var(--muted)">📜 Histórico</label>' +
     h.slice().reverse().map(x =>
       '<div class="hist-item"><span class="hist-em">' + esc(x.em) + '</span><span>' + esc(x.texto) + '</span></div>').join('') +
     '</div>';
 }
+
+function passosHTML(c){
+  // So os caminhos que o processo permite. Quem decide de verdade e o
+  // servidor: aqui e so o convite.
+  const si = sitInfo(c.situacao);
+  const ps = si.proximos || [];
+  if(!ps.length) return '<label>Pr\u00f3ximo passo</label><p class="passos-nota">Este chamado chegou ao fim do fluxo.</p>';
+  return '<label>Pr\u00f3ximo passo</label>' + ps.map(x => {
+    const cancel = x.para === 'cancelado';
+    const voltar = !cancel && TRILHA.indexOf(x.para) <= TRILHA.indexOf(c.situacao);
+    const cls = cancel ? 'perigo' : (voltar ? 'secundario' : '');
+    return '<button type="button" class="btn-passo ' + cls + '" data-para="' + x.para + '">' +
+           esc(x.rotulo) + '<span class="seta">\u2192</span></button>';
+  }).join('') +
+  '<p class="passos-nota">O que voc\u00ea escrever acima entra no hist\u00f3rico junto com a mudan\u00e7a.</p>';
+}
+
 window.abrirCham = function(id){
   const c = CHAM.find(x => x.id === id);
   if(!c) return;
   cEditId = id;
   $('cTitulo').textContent = 'Chamado O.S. ' + (c.os || '');
-  preencherSits();
+  $('cTrilha').innerHTML = trilhaHTML(c);
   $('cOS').value = c.os || ''; $('cCliente').value = c.cliente || '';
   $('cCidade').value = c.cidade || ''; $('cUF').value = c.uf || '';
-  $('cParceiro').value = c.parceiro || ''; $('cSit').value = c.situacao || 'aberto';
+  $('cParceiro').value = c.parceiro || '';
   $('cAberto').value = (c.aberto_em || '').slice(0,10);
   $('cPedido').value = c.pedido || ''; $('cRastreio').value = c.rastreio || '';
   $('cObs').value = c.obs || ''; $('cNota').value = '';
   $('cCampoNota').style.display = ''; $('cHist').innerHTML = histHTML(c);
+  $('cPassos').style.display = ''; $('cPassos').innerHTML = passosHTML(c);
+  $('cPassos').querySelectorAll('.btn-passo').forEach(b =>
+    b.onclick = () => avancar(b.dataset.para));
   $('cExcluir').style.display = '';
   ovCham.classList.add('on');
 };
+
+function camposDoForm(){
+  return {
+    os: $('cOS').value.trim(), cliente: $('cCliente').value.trim(),
+    cidade: $('cCidade').value.trim(), uf: $('cUF').value,
+    parceiro: $('cParceiro').value.trim(),
+    aberto_em: $('cAberto').value, pedido: $('cPedido').value.trim(),
+    rastreio: $('cRastreio').value.trim(), obs: $('cObs').value.trim(),
+  };
+}
+
+// Avanca o chamado para o passo escolhido, salvando junto o que foi editado.
+async function avancar(para){
+  const c = CHAM.find(x => x.id === cEditId);
+  if(!c) return;
+  const alvo = sitInfo(para).rotulo;
+  if(para === 'cancelado' && !confirm('Cancelar o chamado da O.S. ' + c.os + '?\n\nEle sai do fluxo. D\u00e1 para reabrir depois.')) return;
+  const item = Object.assign(camposDoForm(), {situacao: para});
+  if(!item.os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
+  if(!item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
+  if(await api('/api/chamado', {op:'update', id:cEditId, item:item, nota:$('cNota').value.trim()})){
+    aviso('\u2714 ' + alvo);
+    ovCham.classList.remove('on');
+    renderCham();
+  }
+}
+
 $('btnNovoCham').onclick = () => {
   cEditId = null;
   $('cTitulo').textContent = 'Novo chamado';
-  preencherSits();
   ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs','cNota'].forEach(i => $(i).value = '');
-  $('cUF').value = ''; $('cSit').value = 'aberto';
+  $('cUF').value = '';
   $('cAberto').value = hojeISO();          // chamado novo ja nasce com data
-  $('cCampoNota').style.display = 'none';  // ainda nao ha historico
+  // Todo chamado comeca no passo 1: nao se cria no meio do processo.
+  $('cTrilha').innerHTML = trilhaHTML({situacao: TRILHA[0]});
+  $('cCampoNota').style.display = 'none';
+  $('cPassos').style.display = 'none';
   $('cHist').innerHTML = ''; $('cExcluir').style.display = 'none';
   ovCham.classList.add('on'); $('cOS').focus();
 };
@@ -856,21 +970,16 @@ $('cCancelar').onclick = () => ovCham.classList.remove('on');
 ovCham.onclick = e => { if(e.target === ovCham) ovCham.classList.remove('on'); };
 
 $('cSalvar').onclick = async () => {
-  const os = $('cOS').value.trim(), cli = $('cCliente').value.trim();
-  if(!os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
-  if(!cli){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
-  const item = {
-    os: os, cliente: cli,
-    cidade: $('cCidade').value.trim(), uf: $('cUF').value,
-    parceiro: $('cParceiro').value.trim(), situacao: $('cSit').value,
-    aberto_em: $('cAberto').value, pedido: $('cPedido').value.trim(),
-    rastreio: $('cRastreio').value.trim(), obs: $('cObs').value.trim(),
-  };
+  const item = camposDoForm();
+  if(!item.os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
+  if(!item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
+  // Salvar grava os dados e a observacao; quem muda de passo sao os botoes.
   const body = cEditId
-    ? { op:'update', id:cEditId, item: item, nota: $('cNota').value.trim() }
-    : { op:'add', item: item };
+    ? { op:'update', id:cEditId, item:item, nota: $('cNota').value.trim() }
+    : { op:'add', item:item };
   if(await api('/api/chamado', body)){ ovCham.classList.remove('on'); renderCham(); }
 };
+
 $('cExcluir').onclick = async () => {
   if(!cEditId) return;
   const c = CHAM.find(x => x.id === cEditId);
