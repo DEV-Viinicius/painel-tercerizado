@@ -27,6 +27,7 @@ import xlrd
 
 from unificar_atendimentos import ler_terceirizados, ler_equipamentos, limpa, norm
 from pagina import PAGINA
+import chamados as _ch
 
 
 def _resolver_pasta_dados():
@@ -45,7 +46,12 @@ ARQ_DADOS = os.path.join(PASTA, 'dados.json')
 ARQ_LOGO = os.path.join(PASTA, 'LOGO SOLIVETTI.jpg')
 ARQ_TERC = os.path.join(PASTA, 'PLANILHA APOIO - ATENDIMENTOS TERCEIRIZADOS (1).xlsx')
 ARQ_EQUIP_XLSX = os.path.join(PASTA, 'Relatório Equipamentos - Completo.xlsx')
-PORTA = 8000
+# Porta fixa 8000 (todo mundo acessa localhost:8000). PAINEL_PORTA so e usada
+# para testar uma versao nova sem derrubar o painel que ja esta aberto.
+try:
+    PORTA = int(os.environ.get('PAINEL_PORTA') or 8000)
+except ValueError:
+    PORTA = 8000
 
 import unificar_atendimentos as _u
 _u.PASTA = PASTA
@@ -98,7 +104,7 @@ def construir_seed():
             'departamento': departamento, 'fabricante': fabricante, 'cliente': cliente,
         })
 
-    return {'tecnicos': tecnicos, 'equipamentos': equipamentos, 'filtros': []}
+    return {'tecnicos': tecnicos, 'equipamentos': equipamentos, 'filtros': [], 'chamados': []}
 
 
 def carregar_dados():
@@ -124,8 +130,13 @@ def carregar_dados():
                 maior = max(maior, _n)
         for it in d.get('equipamentos', []):
             maior = max(maior, _num_id(it.get('id')))
+        for it in d.get('chamados', []):
+            maior = max(maior, _num_id(it.get('id')))
         _seq[0] = max(_seq[0], maior)
         d.setdefault('filtros', [])
+        # Base feita antes do modulo de chamados existir: abre sem chamado nenhum
+        # em vez de quebrar a tela.
+        d.setdefault('chamados', [])
         return d
     try:
         d = construir_seed()
@@ -139,7 +150,7 @@ def carregar_dados():
         print(f'       {PASTA}')
         print(f'       (faltando: {os.path.basename(e.filename or "")})')
         print(f'AVISO: abrindo uma base VAZIA, visivel so neste PC.')
-        return {'tecnicos': {}, 'equipamentos': [], 'filtros': []}
+        return {'tecnicos': {}, 'equipamentos': [], 'filtros': [], 'chamados': []}
     salvar_dados(d)
     return d
 
@@ -422,6 +433,64 @@ def _sincronizar(novos, idx, eq):
 
 # ---------------------------------------------------------------- exportacao
 
+def importar_chamados(conteudo, modo='merge'):
+    """Importa a aba CHAMADOS TERCEIRIZADOS de um .xlsx para dentro do painel.
+
+    modo 'merge'      : so entra chamado cujo numero de OS ainda nao existe aqui
+                        (o padrao -- nunca sobrescreve o que ja foi atualizado
+                        a mao no painel).
+    modo 'substituir' : apaga todos os chamados e poe os da planilha no lugar.
+    """
+    tmp = os.path.join(PASTA, f'_chamados_{os.getpid()}.xlsx')
+    try:
+        with open(tmp, 'wb') as f:
+            f.write(conteudo)
+        novos, rel = _ch.importar(tmp, DADOS.get('equipamentos', []), novo_id)
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+    if modo == 'substituir':
+        rel['ignorados'] = 0
+        DADOS['chamados'] = novos
+        return rel
+
+    atuais = DADOS.setdefault('chamados', [])
+
+    def _chave(c):
+        """Como reconhecer que dois registros sao o mesmo chamado.
+
+        Normalmente e o numero da O.S. Mas ha linhas na planilha SEM numero
+        nenhum: se a chave fosse so a O.S., o vazio nunca casaria com nada e
+        elas entrariam de novo a cada importacao. Nesses casos vale o conjunto
+        cliente + parceiro + observacao.
+        """
+        os_ = str(c.get('os', '')).strip()
+        if os_:
+            return ('os', os_)
+        return ('sem_os', norm(c.get('cliente')), norm(c.get('parceiro')), norm(c.get('obs')))
+
+    ja_tem = {_chave(c) for c in atuais}
+    entram = []
+    for c in novos:
+        k = _chave(c)
+        if k in ja_tem:
+            continue
+        ja_tem.add(k)        # a propria planilha pode repetir a mesma linha
+        entram.append(c)
+    rel['ignorados'] = len(novos) - len(entram)
+    rel['importados'] = len(entram)
+    # o relatorio por situacao tem de refletir o que REALMENTE entrou
+    rel['por_situacao'] = {}
+    for c in entram:
+        rel['por_situacao'][c['situacao']] = rel['por_situacao'].get(c['situacao'], 0) + 1
+    rel['sem_uf'] = sum(1 for c in entram if not c.get('uf'))
+    atuais.extend(entram)
+    return rel
+
+
 def _split_tel(s):
     m = re.match(r'^\((\w+)\)\s*(.*)$', (s or '').strip())
     if m:
@@ -506,7 +575,14 @@ class Handler(BaseHTTPRequestHandler):
                     globals()['DADOS'] = carregar_dados()
                 except Exception:
                     pass
-                self._envia(json.dumps(DADOS, ensure_ascii=False))
+                # A lista de situacoes vai junto para a tela nao ter uma copia
+                # propria: a regra mora so no chamados.py.
+                resp = dict(DADOS)
+                resp['_situacoes'] = [
+                    {'chave': k, 'rotulo': v[0], 'cor': v[1], 'aberta': v[2]}
+                    for k, v in _ch.SITUACOES.items()
+                ]
+                self._envia(json.dumps(resp, ensure_ascii=False))
             return
         self._envia('Nao encontrado', 'text/plain', 404)
 
@@ -537,6 +613,14 @@ class Handler(BaseHTTPRequestHandler):
                                                   req.get('modo', 'substituir'))
                     salvar_dados(DADOS)
                     self._envia(json.dumps({**DADOS, '_import': stats}, ensure_ascii=False))
+                    return
+                elif self.path == '/api/chamado':
+                    self._op_chamado(req)
+                elif self.path == '/api/importar_chamados':
+                    conteudo = base64.b64decode(req.get('dados_b64', ''))
+                    stats = importar_chamados(conteudo, req.get('modo', 'merge'))
+                    salvar_dados(DADOS)
+                    self._envia(json.dumps({**DADOS, '_impch': stats}, ensure_ascii=False))
                     return
                 elif self.path == '/api/filtro':
                     self._op_filtro(req)
@@ -604,6 +688,71 @@ class Handler(BaseHTTPRequestHandler):
             _id = req['id']
             eq[:] = [x for x in eq if x.get('id') != _id]
 
+    def _op_chamado(self, req):
+        """Cria, altera, reabre e exclui chamado. Toda mudanca entra no historico."""
+        op = req.get('op')
+        lista = DADOS.setdefault('chamados', [])
+        hoje = time.strftime('%Y-%m-%d')
+
+        if op == 'add':
+            item = dict(req['item'])
+            item['id'] = novo_id('c')
+            item.setdefault('situacao', _ch.SIT_PADRAO)
+            # Chamado novo ja nasce com data: e justamente o que faltava na planilha.
+            if not item.get('aberto_em'):
+                item['aberto_em'] = hoje
+            item['historico'] = []
+            if item['situacao'] not in _ch.ABERTAS:
+                item['fechado_em'] = hoje
+            _ch.anotar(item, f"Chamado criado como «{_ch.SITUACOES[item['situacao']][0]}»")
+            if item.get('obs'):
+                _ch.anotar(item, item['obs'])
+            lista.append(item)
+
+        elif op == 'update':
+            _id = req['id']
+            novo = dict(req['item'])
+            atual = next((x for x in lista if x.get('id') == _id), None)
+            if atual is None:
+                return
+            sit_antes = atual.get('situacao')
+            hist = atual.get('historico', [])
+            novo['id'] = _id
+            novo['historico'] = hist
+            novo.setdefault('aberto_em', atual.get('aberto_em', ''))
+            sit_depois = novo.get('situacao', sit_antes)
+
+            if sit_depois != sit_antes:
+                de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
+                para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
+                _ch.anotar(novo, f'{de} → {para}')
+                # Fechou agora: marca a data. Reabriu: limpa, senao o contador
+                # de dias congelaria na data da conclusao antiga.
+                if sit_depois not in _ch.ABERTAS:
+                    novo['fechado_em'] = hoje
+                else:
+                    novo['fechado_em'] = ''
+
+            nota = (req.get('nota') or '').strip()
+            if nota:
+                _ch.anotar(novo, nota)
+
+            for i, x in enumerate(lista):
+                if x.get('id') == _id:
+                    lista[i] = novo
+                    break
+
+        elif op == 'nota':
+            # So acrescenta um andamento, sem mexer no resto.
+            _id, texto = req['id'], (req.get('texto') or '').strip()
+            ch = next((x for x in lista if x.get('id') == _id), None)
+            if ch is not None and texto:
+                _ch.anotar(ch, texto)
+
+        elif op == 'delete':
+            _id = req['id']
+            lista[:] = [x for x in lista if x.get('id') != _id]
+
     def _op_filtro(self, req):
         op = req.get('op')
         fs = DADOS.setdefault('filtros', [])
@@ -645,6 +794,8 @@ class ServidorPainel(ThreadingHTTPServer):
 
 
 def main():
+    # PAINEL_SEM_NAVEGADOR=1: sobe o servidor sem abrir janela (teste automatizado).
+    _abrir = not os.environ.get('PAINEL_SEM_NAVEGADOR')
     if _ja_esta_rodando():
         try:
             webbrowser.open(f'http://localhost:{PORTA}')
@@ -672,7 +823,8 @@ def main():
     print(f'Painel no ar em http://localhost:{PORTA}')
     print('==========================================================')
     try:
-        webbrowser.open(f'http://localhost:{PORTA}')
+        if _abrir:
+            webbrowser.open(f'http://localhost:{PORTA}')
     except Exception:
         pass
     try:

@@ -107,6 +107,56 @@ PAGINA = r"""<!DOCTYPE html>
   #status { position:fixed; bottom:16px; right:16px; background:#243447; color:#fff; padding:10px 16px; border-radius:8px;
             font-size:13px; opacity:0; transition:.2s; pointer-events:none; z-index:30; }
   #status.on { opacity:.95; }
+
+  /* ---------- abas: Equipamentos | Chamados ---------- */
+  .abas { display:flex; gap:4px; padding:0 24px; background:linear-gradient(120deg,#1f4e78,#2e75b6); }
+  .aba { border:0; background:rgba(255,255,255,.12); color:#fff; font-size:14px; font-family:inherit;
+         padding:10px 18px; border-radius:10px 10px 0 0; cursor:pointer; opacity:.8; }
+  .aba:hover { background:rgba(255,255,255,.22); opacity:1; }
+  .aba.ativa { background:var(--bg); color:var(--azul); font-weight:700; opacity:1; }
+  .tela { display:none; }
+  .tela.on { display:block; }
+
+  /* ---------- chamados ---------- */
+  .ch-resumo { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; padding:16px 24px 0; }
+  .ch-cartao { background:#fff; border:1px solid var(--linha); border-left:5px solid var(--azul2); border-radius:10px;
+               padding:12px 14px; cursor:pointer; transition:.12s; box-shadow:0 2px 6px rgba(30,60,90,.06); }
+  .ch-cartao:hover { border-color:var(--azul2); transform:translateY(-1px); }
+  .ch-cartao.ativo { background:#eaf2fb; border-color:var(--azul2); box-shadow:0 0 0 2px var(--azul2) inset; }
+  .ch-cartao .n { font-size:26px; font-weight:700; line-height:1.1; }
+  .ch-cartao .r { font-size:12.5px; color:var(--muted); margin-top:2px; }
+
+  .ch-barra { padding:14px 24px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .ch-barra input[type=text], .ch-barra select { padding:9px 12px; border:1px solid #cfd8e3; border-radius:8px;
+                                                 font-size:14px; background:#fff; font-family:inherit; }
+  .ch-barra input[type=text] { flex:1; min-width:220px; max-width:340px; }
+
+  .ch-tabela { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--linha);
+               border-radius:10px; overflow:hidden; font-size:13.5px; }
+  .ch-tabela th { background:#f5f8fc; text-align:left; padding:10px; font-size:12.5px; color:var(--muted);
+                  border-bottom:1px solid var(--linha); white-space:nowrap; }
+  .ch-tabela td { padding:9px 10px; border-bottom:1px solid var(--linha); vertical-align:top; }
+  .ch-tabela tbody tr:hover { background:#f7fbff; }
+  .ch-tabela tbody tr { cursor:pointer; }
+  .ch-os { font-family:Consolas,monospace; font-weight:700; color:var(--azul); white-space:nowrap; }
+  .ch-sub { color:var(--muted); font-size:12px; }
+
+  .sit { display:inline-block; padding:3px 9px; border-radius:20px; font-size:12px; font-weight:600;
+         color:#fff; white-space:nowrap; }
+  .ch-dias { font-weight:700; white-space:nowrap; }
+  .ch-dias.alerta { color:var(--amarelo); }
+  .ch-dias.grave  { color:var(--vermelho); }
+  .ch-dias.sem    { color:var(--muted); font-weight:400; font-style:italic; }
+  .ch-acao { border:1px solid #cfd8e3; background:#fff; border-radius:6px; padding:3px 7px; cursor:pointer; font-size:13px; }
+  .ch-acao:hover { background:#eef2f7; }
+
+  .hist { border-top:1px solid var(--linha); margin-top:4px; padding-top:10px; }
+  .hist-item { display:flex; gap:10px; padding:7px 0; border-bottom:1px dashed var(--linha); font-size:13px; }
+  .hist-item:last-child { border-bottom:0; }
+  .hist-em { color:var(--muted); font-size:12px; white-space:nowrap; min-width:112px; font-family:Consolas,monospace; }
+  .campo2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .aviso-caixa { background:#fff8e6; border:1px solid #f0d99b; color:#7a5c00; border-radius:8px;
+                 padding:10px 12px; font-size:13px; margin:14px 24px 0; }
 </style>
 </head>
 <body>
@@ -118,12 +168,21 @@ PAGINA = r"""<!DOCTYPE html>
       <p>Escolha o estado para ver as séries e os clientes.</p>
     </div>
   </div>
-  <div class="topbtns">
+  <div class="topbtns" id="btnsEquip">
     <button id="btnImportar">📥 Importar Excel (séries)</button>
     <button id="btnRestaurar">↺ Restaurar da planilha</button>
     <button id="btnAtualizar">🔄 Atualizar e salvar nas planilhas</button>
   </div>
+  <div class="topbtns" id="btnsCham" style="display:none">
+    <button id="btnNovoCham">➕ Novo chamado</button>
+    <button id="btnImpCham">📥 Importar planilha de chamados</button>
+  </div>
 </header>
+<nav class="abas">
+  <button class="aba ativa" data-tela="telaEquip">🖨️ Equipamentos por estado</button>
+  <button class="aba" data-tela="telaCham">🛠️ Chamados <span id="abaChamN"></span></button>
+</nav>
+<div class="tela on" id="telaEquip">
 <div class="estados">
   <div class="titulo">ESCOLHA O ESTADO:</div>
   <div class="ufbtns" id="ufbtns"></div>
@@ -147,6 +206,25 @@ PAGINA = r"""<!DOCTYPE html>
   <div class="ms-lista" id="colLista"></div>
 </div>
 <div class="conteudo" id="conteudo"><div class="placeholder">Carregando...</div></div>
+</div><!-- /telaEquip -->
+
+<div class="tela" id="telaCham">
+  <div class="ch-resumo" id="chResumo"></div>
+  <div class="ch-barra">
+    <input type="text" id="chBusca" placeholder="🔎 Buscar por OS, cliente, parceiro, rastreio ou pedido...">
+    <select id="chUF"><option value="">📍 Todos os estados</option></select>
+    <select id="chParceiro"><option value="">🤝 Todos os parceiros</option></select>
+    <select id="chSit"><option value="">◉ Todas as situações</option></select>
+    <select id="chOrdem">
+      <option value="dias">⏱️ Mais parados primeiro</option>
+      <option value="os">Nº da OS</option>
+      <option value="cliente">Cliente</option>
+      <option value="parceiro">Parceiro</option>
+    </select>
+    <button class="btn-filtro" id="chLimpar">✖ Limpar filtros</button>
+  </div>
+  <div class="conteudo" id="chConteudo"><div class="placeholder">Carregando...</div></div>
+</div><!-- /telaCham -->
 
 <div class="overlay" id="ovTec"><div class="modal">
   <h3 id="tTitulo">Novo técnico</h3>
@@ -199,6 +277,57 @@ PAGINA = r"""<!DOCTYPE html>
   <div class="rodape"><button class="salvar" id="impResFechar">Fechar</button></div>
 </div></div>
 
+<div class="overlay" id="ovCham"><div class="modal" style="max-width:720px">
+  <h3 id="cTitulo">Novo chamado</h3>
+  <div class="corpo">
+    <div class="campo2">
+      <div class="campo"><label>Nº da O.S. *</label><input type="text" id="cOS"></div>
+      <div class="campo"><label>Situação *</label><select id="cSit"></select></div>
+    </div>
+    <div class="campo"><label>Cliente *</label><input type="text" id="cCliente" list="listaClientes">
+      <datalist id="listaClientes"></datalist></div>
+    <div class="campo2">
+      <div class="campo"><label>Cidade</label><input type="text" id="cCidade"></div>
+      <div class="campo"><label>Estado (UF)</label><select id="cUF"></select></div>
+    </div>
+    <div class="campo"><label>Parceiro / terceirizado</label><input type="text" id="cParceiro" list="listaParceiros">
+      <datalist id="listaParceiros"></datalist></div>
+    <div class="campo2">
+      <div class="campo"><label>Aberto em</label><input type="date" id="cAberto"></div>
+      <div class="campo"><label>Pedido de compra</label><input type="text" id="cPedido"></div>
+    </div>
+    <div class="campo"><label>Código de rastreio</label><input type="text" id="cRastreio"></div>
+    <div class="campo"><label>Observação</label><textarea id="cObs"></textarea></div>
+    <div class="campo" id="cCampoNota"><label>Novo andamento (vai para o histórico)</label>
+      <textarea id="cNota" placeholder="Ex.: peça despachada pelos Correios, código AD123..."></textarea></div>
+    <div id="cHist"></div>
+  </div>
+  <div class="rodape">
+    <button class="cancelar" id="cExcluir" style="margin-right:auto;background:#fde8e6;color:#c0392b;display:none">🗑️ Excluir</button>
+    <button class="cancelar" id="cCancelar">Cancelar</button>
+    <button class="salvar" id="cSalvar">Salvar</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="ovImpCh"><div class="modal">
+  <h3>Importar chamados da planilha</h3>
+  <div class="corpo">
+    <div class="campo"><label>Arquivo .xlsx com a aba "CHAMADOS TERCEIRIZADOS"</label>
+      <input type="file" id="impChFile" accept=".xlsx"></div>
+    <div class="campo"><label>O que fazer com os que já estão aqui</label>
+      <select id="impChModo">
+        <option value="merge">Só acrescentar os que faltam (recomendado)</option>
+        <option value="substituir">Apagar tudo e pôr os da planilha</option>
+      </select></div>
+    <p style="font-size:13px;color:var(--muted);margin:4px 0 0">
+      No modo <b>acrescentar</b>, chamado cujo nº de O.S. já existe aqui é ignorado — o que você
+      atualizou no painel nunca é sobrescrito. A planilha não tem data de abertura, então os
+      importados entram <b>sem data</b> e aparecem como "sem data" na coluna de dias.</p>
+  </div>
+  <div class="rodape"><button class="cancelar" id="impChCancelar">Cancelar</button>
+    <button class="salvar" id="impChImportar">Importar</button></div>
+</div></div>
+
 <div id="status"></div>
 
 <script>
@@ -220,6 +349,7 @@ function selCol(k){ return k==='cidade' ? cidadesSel : filtroCol[k]; }
 async function carregar(){
   const r = await fetch('/api/dados'); const d = await r.json();
   TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[];
+  CHAM = d.chamados||[]; if(d._situacoes) SITS = d._situacoes;
 }
 async function api(url, body){
   try {
@@ -227,7 +357,7 @@ async function api(url, body){
     if(!r.ok) throw new Error('http '+r.status);
     const d = await r.json();
     if(d.erro) throw new Error(d.erro);
-    TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[];
+    TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[]; CHAM = d.chamados||CHAM;
     aviso('✔ Salvo no servidor');
     return true;
   } catch(e){ alert('Não consegui salvar no servidor. Verifique se o Painel.bat continua aberto.\\n\\n'+e); return false; }
@@ -537,8 +667,257 @@ fSalvos.addEventListener('change', ()=>{
   render();
 });
 
+
+/* =========================================================================
+   CHAMADOS TERCEIRIZADOS
+   Substitui a aba CHAMADOS da planilha do Google. O que ela nao tinha e aqui
+   tem: data de abertura, contador de dias parado, situacao de lista fixa e
+   historico (cada andamento vira uma linha, em vez de apagar o anterior).
+   ========================================================================= */
+let CHAM = [], SITS = [], chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
+const sitInfo = k => SITS.find(s => s.chave === k) || { rotulo:k||'?', cor:'#6b7a90', aberta:true };
+const ehAberta = k => !!sitInfo(k).aberta;
+
+function hojeISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function diasParado(c){
+  if(!c.aberto_em) return null;
+  const ini = new Date(c.aberto_em + 'T00:00:00');
+  if(isNaN(ini)) return null;
+  const fim = c.fechado_em ? new Date(c.fechado_em + 'T00:00:00') : new Date();
+  return Math.max(0, Math.round((fim - ini) / 86400000));
+}
+function dataBR(iso){
+  if(!iso) return '';
+  const p = String(iso).slice(0,10).split('-');
+  return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0] : iso;
+}
+
+/* ---- abas ---- */
+document.querySelectorAll('.aba').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.aba').forEach(x => x.classList.remove('ativa'));
+  document.querySelectorAll('.tela').forEach(x => x.classList.remove('on'));
+  b.classList.add('ativa');
+  $(b.dataset.tela).classList.add('on');
+  const ehCham = b.dataset.tela === 'telaCham';
+  $('btnsEquip').style.display = ehCham ? 'none' : '';
+  $('btnsCham').style.display  = ehCham ? '' : 'none';
+  if(ehCham) renderCham();
+});
+
+/* ---- filtros ---- */
+function chListaBase(){
+  let L = CHAM.slice();
+  const a = chFiltro.atalho;
+  if(a === 'abertos')   L = L.filter(c => ehAberta(c.situacao));
+  if(a === 'peca')      L = L.filter(c => c.situacao === 'aguardando_peca');
+  if(a === 'parados')   L = L.filter(c => ehAberta(c.situacao) && (diasParado(c) ?? -1) > 15);
+  if(a === 'semdata')   L = L.filter(c => ehAberta(c.situacao) && !c.aberto_em);
+  if(a === 'concluido') L = L.filter(c => !ehAberta(c.situacao));
+  if(chFiltro.uf === '__sem')      L = L.filter(c => !c.uf);
+  else if(chFiltro.uf)             L = L.filter(c => (c.uf||'') === chFiltro.uf);
+  if(chFiltro.parceiro) L = L.filter(c => (c.parceiro||'') === chFiltro.parceiro);
+  if(chFiltro.sit)      L = L.filter(c => c.situacao === chFiltro.sit);
+  const q = chFiltro.busca.trim().toLowerCase();
+  if(q) L = L.filter(c => [c.os,c.cliente,c.parceiro,c.rastreio,c.pedido,c.cidade,c.obs].join(' ').toLowerCase().includes(q));
+  return L;
+}
+function chOrdenar(L){
+  const f = {
+    dias:     (a,b) => (diasParado(b) ?? -1) - (diasParado(a) ?? -1),
+    os:       (a,b) => String(a.os).localeCompare(String(b.os), 'pt-BR', {numeric:true}),
+    cliente:  (a,b) => String(a.cliente||'').localeCompare(String(b.cliente||''), 'pt-BR'),
+    parceiro: (a,b) => String(a.parceiro||'').localeCompare(String(b.parceiro||''), 'pt-BR'),
+  }[chOrdem];
+  // Em aberto sempre antes dos fechados: o que precisa de acao fica no topo.
+  return L.sort((a,b) => (ehAberta(b.situacao) - ehAberta(a.situacao)) || f(a,b));
+}
+
+function renderResumo(){
+  const ab = CHAM.filter(c => ehAberta(c.situacao));
+  const cartoes = [
+    { k:'abertos',   n:ab.length,                                              r:'em aberto',            cor:'var(--azul2)' },
+    { k:'peca',      n:CHAM.filter(c => c.situacao==='aguardando_peca').length, r:'aguardando pe\u00e7a',  cor:'#d08a00' },
+    { k:'parados',   n:ab.filter(c => (diasParado(c) ?? -1) > 15).length,       r:'parados +15 dias',     cor:'var(--vermelho)' },
+    { k:'semdata',   n:ab.filter(c => !c.aberto_em).length,                     r:'sem data de abertura', cor:'var(--muted)' },
+    { k:'concluido', n:CHAM.length - ab.length,                                 r:'conclu\u00eddos',       cor:'var(--verde)' },
+  ];
+  $('chResumo').innerHTML = cartoes.map(c =>
+    '<div class="ch-cartao' + (chFiltro.atalho===c.k?' ativo':'') + '" data-k="' + c.k + '" style="border-left-color:' + c.cor + '">' +
+    '<div class="n" style="color:' + c.cor + '">' + c.n + '</div><div class="r">' + c.r + '</div></div>').join('');
+  $('chResumo').querySelectorAll('.ch-cartao').forEach(el => el.onclick = () => {
+    chFiltro.atalho = (chFiltro.atalho === el.dataset.k) ? '' : el.dataset.k;
+    renderCham();
+  });
+  $('abaChamN').textContent = ab.length ? '(' + ab.length + ')' : '';
+}
+
+function popularSelects(){
+  const sel = (id, itens, atual) => {
+    const e = $(id), prim = e.options[0].outerHTML;
+    e.innerHTML = prim + itens.map(i =>
+      '<option value="' + esc(i.v) + '"' + (atual===i.v?' selected':'') + '>' + esc(i.t) + '</option>').join('');
+  };
+  const ufs = [...new Set(CHAM.map(c => c.uf).filter(Boolean))].sort();
+  sel('chUF', ufs.map(u => ({v:u, t:u})), chFiltro.uf);
+  if(CHAM.some(c => !c.uf)) $('chUF').insertAdjacentHTML('beforeend',
+    '<option value="__sem"' + (chFiltro.uf==='__sem'?' selected':'') + '>\u2014 sem estado \u2014</option>');
+  const ps = [...new Set(CHAM.map(c => c.parceiro).filter(Boolean))].sort();
+  sel('chParceiro', ps.map(x => ({v:x, t:x})), chFiltro.parceiro);
+  sel('chSit', SITS.map(s => ({v:s.chave, t:s.rotulo})), chFiltro.sit);
+  $('listaClientes').innerHTML  = [...new Set(CHAM.map(c=>c.cliente).filter(Boolean))].sort()
+                                    .map(x=>'<option value="' + esc(x) + '">').join('');
+  $('listaParceiros').innerHTML = ps.map(x=>'<option value="' + esc(x) + '">').join('');
+}
+
+function renderCham(){
+  renderResumo();
+  popularSelects();
+  const L = chOrdenar(chListaBase());
+
+  const semUF = CHAM.filter(c => ehAberta(c.situacao) && !c.uf).length;
+  const alerta = semUF ? '<div class="aviso-caixa">\u26a0\ufe0f ' + semUF + ' chamado(s) em aberto est\u00e3o <b>sem estado</b>. ' +
+      'A planilha antiga n\u00e3o tinha coluna de cidade \u2014 o estado foi deduzido do nome do cliente e nesses n\u00e3o deu. ' +
+      'Abra o chamado e preencha para ele aparecer nos filtros por estado.</div>' : '';
+
+  if(!L.length){
+    $('chConteudo').innerHTML = alerta + '<div class="placeholder">Nenhum chamado com esses filtros.</div>';
+    return;
+  }
+  const linhas = L.map(c => {
+    const si = sitInfo(c.situacao), d = diasParado(c), ab = ehAberta(c.situacao);
+    let cls = 'sem', txt = 'sem data';
+    if(d !== null){ txt = d + (d === 1 ? ' dia' : ' dias'); cls = (ab && d > 30) ? 'grave' : (ab && d > 15) ? 'alerta' : ''; }
+    return '<tr data-id="' + c.id + '">' +
+      '<td class="ch-os">' + esc(c.os) + '</td>' +
+      '<td>' + esc(c.cliente) + (c.obs ? '<div class="ch-sub">' + esc(c.obs.slice(0,70)) + (c.obs.length>70?'\u2026':'') + '</div>' : '') + '</td>' +
+      '<td>' + esc(c.cidade||'') + (c.uf ? ' <b>' + esc(c.uf) + '</b>' : '<span class="ch-sub">\u2014</span>') + '</td>' +
+      '<td>' + esc(c.parceiro||'\u2014') + '</td>' +
+      '<td><span class="sit" style="background:' + si.cor + '">' + esc(si.rotulo) + '</span></td>' +
+      '<td>' + (dataBR(c.aberto_em) || '<span class="ch-sub">\u2014</span>') + '</td>' +
+      '<td class="ch-dias ' + cls + '">' + txt + '</td>' +
+      '<td>' + esc(c.rastreio||'') + '</td>' +
+      '<td>' + esc(c.pedido||'') + '</td>' +
+      '<td><button class="ch-acao">\u270f\ufe0f</button></td></tr>';
+  }).join('');
+  $('chConteudo').innerHTML = alerta +
+    '<div class="estado-cab"><h2>Chamados</h2><span class="sub">' + L.length + ' de ' + CHAM.length + ' chamado(s)</span></div>' +
+    '<table class="ch-tabela"><thead><tr>' +
+    '<th>O.S.</th><th>Cliente</th><th>Cidade / UF</th><th>Parceiro</th><th>Situa\u00e7\u00e3o</th>' +
+    '<th>Aberto em</th><th>Parado h\u00e1</th><th>Rastreio</th><th>Pedido</th><th></th>' +
+    '</tr></thead><tbody>' + linhas + '</tbody></table>';
+  $('chConteudo').querySelectorAll('tbody tr').forEach(tr =>
+    tr.onclick = () => abrirCham(tr.dataset.id));
+}
+
+/* ---- modal ---- */
+const ovCham = $('ovCham');
+let cEditId = null;
+UFS_BR.forEach(u => $('cUF').insertAdjacentHTML('beforeend', '<option>' + u + '</option>'));
+
+function preencherSits(){
+  $('cSit').innerHTML = SITS.map(s => '<option value="' + s.chave + '">' + esc(s.rotulo) + '</option>').join('');
+}
+function histHTML(c){
+  const h = (c.historico || []);
+  if(!h.length) return '';
+  return '<div class="hist"><label style="font-size:13px;font-weight:600;color:var(--muted)">\ud83d\udcdc Hist\u00f3rico</label>' +
+    h.slice().reverse().map(x =>
+      '<div class="hist-item"><span class="hist-em">' + esc(x.em) + '</span><span>' + esc(x.texto) + '</span></div>').join('') +
+    '</div>';
+}
+window.abrirCham = function(id){
+  const c = CHAM.find(x => x.id === id);
+  if(!c) return;
+  cEditId = id;
+  $('cTitulo').textContent = 'Chamado O.S. ' + (c.os || '');
+  preencherSits();
+  $('cOS').value = c.os || ''; $('cCliente').value = c.cliente || '';
+  $('cCidade').value = c.cidade || ''; $('cUF').value = c.uf || '';
+  $('cParceiro').value = c.parceiro || ''; $('cSit').value = c.situacao || 'aberto';
+  $('cAberto').value = (c.aberto_em || '').slice(0,10);
+  $('cPedido').value = c.pedido || ''; $('cRastreio').value = c.rastreio || '';
+  $('cObs').value = c.obs || ''; $('cNota').value = '';
+  $('cCampoNota').style.display = ''; $('cHist').innerHTML = histHTML(c);
+  $('cExcluir').style.display = '';
+  ovCham.classList.add('on');
+};
+$('btnNovoCham').onclick = () => {
+  cEditId = null;
+  $('cTitulo').textContent = 'Novo chamado';
+  preencherSits();
+  ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs','cNota'].forEach(i => $(i).value = '');
+  $('cUF').value = ''; $('cSit').value = 'aberto';
+  $('cAberto').value = hojeISO();          // chamado novo ja nasce com data
+  $('cCampoNota').style.display = 'none';  // ainda nao ha historico
+  $('cHist').innerHTML = ''; $('cExcluir').style.display = 'none';
+  ovCham.classList.add('on'); $('cOS').focus();
+};
+$('cCancelar').onclick = () => ovCham.classList.remove('on');
+ovCham.onclick = e => { if(e.target === ovCham) ovCham.classList.remove('on'); };
+
+$('cSalvar').onclick = async () => {
+  const os = $('cOS').value.trim(), cli = $('cCliente').value.trim();
+  if(!os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
+  if(!cli){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
+  const item = {
+    os: os, cliente: cli,
+    cidade: $('cCidade').value.trim(), uf: $('cUF').value,
+    parceiro: $('cParceiro').value.trim(), situacao: $('cSit').value,
+    aberto_em: $('cAberto').value, pedido: $('cPedido').value.trim(),
+    rastreio: $('cRastreio').value.trim(), obs: $('cObs').value.trim(),
+  };
+  const body = cEditId
+    ? { op:'update', id:cEditId, item: item, nota: $('cNota').value.trim() }
+    : { op:'add', item: item };
+  if(await api('/api/chamado', body)){ ovCham.classList.remove('on'); renderCham(); }
+};
+$('cExcluir').onclick = async () => {
+  if(!cEditId) return;
+  const c = CHAM.find(x => x.id === cEditId);
+  if(!confirm('Excluir o chamado da O.S. ' + (c ? c.os : '') + '?\nO hist\u00f3rico dele some junto.')) return;
+  if(await api('/api/chamado', {op:'delete', id:cEditId})){ ovCham.classList.remove('on'); renderCham(); }
+};
+
+/* ---- filtros da barra ---- */
+$('chBusca').addEventListener('input', e => { chFiltro.busca = e.target.value; renderCham(); });
+$('chUF').addEventListener('change',   e => { chFiltro.uf = e.target.value; renderCham(); });
+$('chParceiro').addEventListener('change', e => { chFiltro.parceiro = e.target.value; renderCham(); });
+$('chSit').addEventListener('change',  e => { chFiltro.sit = e.target.value; renderCham(); });
+$('chOrdem').addEventListener('change',e => { chOrdem = e.target.value; renderCham(); });
+$('chLimpar').onclick = () => {
+  chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' };
+  $('chBusca').value = ''; $('chUF').value = ''; $('chParceiro').value = ''; $('chSit').value = '';
+  renderCham();
+};
+
+/* ---- importar a planilha ---- */
+const ovImpCh = $('ovImpCh');
+$('btnImpCham').onclick = () => { $('impChFile').value = ''; ovImpCh.classList.add('on'); };
+$('impChCancelar').onclick = () => ovImpCh.classList.remove('on');
+$('impChImportar').onclick = async () => {
+  const f = $('impChFile').files[0];
+  if(!f){ alert('Escolha o arquivo .xlsx.'); return; }
+  const modo = $('impChModo').value;
+  if(modo === 'substituir' && !confirm('Isso APAGA os ' + CHAM.length + ' chamados que est\u00e3o aqui, com o hist\u00f3rico, e p\u00f5e os da planilha no lugar.\n\nConfirma?')) return;
+  const b64 = await new Promise(ok => { const r = new FileReader();
+    r.onload = () => ok(r.result.split(',')[1]); r.readAsDataURL(f); });
+  const r = await fetch('/api/importar_chamados', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nome:f.name, dados_b64:b64, modo:modo})});
+  const d = await r.json();
+  if(d.erro){ alert('N\u00e3o consegui importar:\n\n' + d.erro); return; }
+  CHAM = d.chamados || [];
+  ovImpCh.classList.remove('on');
+  const i = d._impch || {};
+  alert('Importa\u00e7\u00e3o conclu\u00edda.\n\n' +
+        'Lidos na planilha: ' + (i.lidos||0) + '\n' +
+        'Entraram no painel: ' + (i.importados||0) + '\n' +
+        'Ignorados (O.S. j\u00e1 existia aqui): ' + (i.ignorados||0) + '\n' +
+        'Sem estado definido: ' + (i.sem_uf||0));
+  renderCham();
+};
+
 busca.addEventListener('input', render);
-(async function(){ await carregar(); construirBotoes(); popularFiltrosSalvos(); render(); })();
+(async function(){ await carregar(); construirBotoes(); popularFiltrosSalvos(); render(); renderResumo(); })();
 </script>
 </body>
 </html>

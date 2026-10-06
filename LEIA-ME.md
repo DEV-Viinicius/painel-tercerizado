@@ -70,6 +70,7 @@ caminho de recuperação deixa de existir.
 | `painel.html` | **a tela** — HTML, CSS e JavaScript. É aqui que se mexe no visual |
 | `gerar_pagina.py` | converte o `painel.html` em `pagina.py` |
 | `pagina.py` | **gerado automaticamente — não edite à mão** |
+| `chamados.py` | **módulo de chamados**: situações, classificação do status antigo, dedução de cidade/UF, histórico e importação da planilha |
 | `unificar_atendimentos.py` | leitura das planilhas de origem |
 | `publicar.py` | faz tudo: gera a página, compila o .exe, empacota e publica |
 | `_original\` | bytecode do .exe antigo, 73 KB, só como prova histórica |
@@ -174,6 +175,55 @@ mapeada da um painel em branco.
 
 Para desenvolver sem encostar na base real, use o `PAINEL_DADOS` (veja
 "Testar sem encostar na rede", acima).
+
+---
+
+## A aba de Chamados
+
+Substitui a aba **CHAMADOS TERCEIRIZADOS** da planilha do Google. Lá o
+acompanhamento tinha quatro furos: o status era texto livre (60 grafias
+diferentes para 332 chamados), **não existia data nenhuma** — não dava para
+saber se um chamado estava parado há 3 dias ou 3 meses —, a cidade morava
+dentro do nome do cliente, e o filtro escondia linhas.
+
+**O que mudou:**
+
+| Na planilha | No painel |
+|---|---|
+| status escrito à mão | `situacao`: lista fixa de 7 (`chamados.py`, dicionário `SITUACOES`) |
+| texto novo apagava o anterior | `historico`: cada mudança vira uma linha com data |
+| sem data | `aberto_em` + contador de dias; amarelo após 15 dias, vermelho após 30 |
+| cidade dentro do nome do cliente | campos `cidade` e `uf` próprios |
+
+Os chamados ficam em `dados.json`, na chave `chamados` — ao lado de
+`tecnicos` e `equipamentos`, sem misturar com eles. Base feita antes deste
+módulo abre normal: `carregar_dados()` cria a chave vazia.
+
+### A importação da planilha
+
+Botão **Importar planilha de chamados**, com o `.xlsx` exportado do Google
+(Arquivo > Fazer download > Microsoft Excel). Duas coisas acontecem na leitura:
+
+1. **O status antigo é classificado** por palavra-chave (`classificar()`), na
+   ordem das regras — "CONCLUIDO - ENVIAR PECA PARA O TECNICO" é conclusão, não
+   espera de peça, por isso `concluido` vem antes das regras de peça. O texto
+   original **nunca se perde**: vai para `obs` e para a primeira linha do histórico.
+2. **A cidade e a UF são deduzidas do nome do cliente** (`deduzir_local()`),
+   cruzando com as cidades que já existem nos equipamentos do painel. Cobre
+   cerca de 80%; o resto fica sem estado e o painel avisa na tela.
+
+Linhas com a **mesma O.S.** viram **um** chamado: a última manda nos campos e as
+anteriores entram no histórico. Isso não é duplicata — era gente lançando linha
+nova porque a planilha não deixava atualizar sem perder o texto anterior.
+
+O modo **acrescentar** (padrão) só traz O.S. que ainda não existem aqui, então
+reimportar a planilha nunca sobrescreve o que foi atualizado no painel nem
+duplica nada. Chamados sem número de O.S. são reconhecidos por
+cliente + parceiro + observação, senão entrariam de novo a cada importação.
+
+**A planilha não tem data de abertura**, então os importados entram sem data e
+aparecem como "sem data" na coluna de dias — o cartão *sem data de abertura* no
+topo mostra quantos são. Chamado criado no painel já nasce com a data de hoje.
 
 ---
 
