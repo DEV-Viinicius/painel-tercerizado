@@ -205,6 +205,12 @@ PAGINA = r"""<!DOCTYPE html>
   .de-para b { color:var(--txt); }
   .hist-quem { background:#eef2f7; color:var(--azul); border-radius:10px; padding:1px 8px; font-size:11.5px;
                font-weight:600; white-space:nowrap; }
+
+  .ch-avancar { border:0; background:var(--verde); color:#fff; border-radius:7px; padding:6px 10px; cursor:pointer;
+                font-size:12.5px; font-weight:600; font-family:inherit; white-space:nowrap; }
+  .ch-avancar:hover { filter:brightness(1.08); }
+  .ch-avancar.reabrir { background:#fff; color:var(--azul); border:1px solid #cfd8e3; font-weight:500; }
+  .ch-acoes { display:flex; gap:6px; align-items:center; justify-content:flex-end; }
 </style>
 </head>
 <body>
@@ -878,7 +884,8 @@ function renderCham(){
       '<td class="ch-dias ' + cls + '">' + txt + '</td>' +
       '<td>' + esc(c.rastreio||'') + '</td>' +
       '<td>' + esc(c.pedido||'') + '</td>' +
-      '<td><button class="ch-acao">\u270f\ufe0f</button></td></tr>';
+      '<td><div class="ch-acoes">' + botaoAvancarHTML(c) +
+        '<button class="ch-acao" title="Corrigir dados do chamado">\u270f\ufe0f</button></div></td></tr>';
   }).join('');
   $('chConteudo').innerHTML = alerta +
     '<div class="estado-cab"><h2>Chamados</h2><span class="sub">' + L.length + ' de ' + CHAM.length + ' chamado(s)</span></div>' +
@@ -888,6 +895,14 @@ function renderCham(){
     '</tr></thead><tbody>' + linhas + '</tbody></table>';
   $('chConteudo').querySelectorAll('tbody tr').forEach(tr =>
     tr.onclick = () => abrirCham(tr.dataset.id));
+  // O Avancar da linha abre a caixa direto, sem passar pelo chamado.
+  $('chConteudo').querySelectorAll('.ch-avancar').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const c = CHAM.find(x => x.id === b.dataset.id);
+    if(!c) return;
+    cEditId = c.id;
+    abrirPasso(c, (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado'));
+  });
 }
 
 /* ---- modal ---- */
@@ -938,6 +953,15 @@ function passosHTML(c){
   return html;
 }
 
+function botaoAvancarHTML(c){
+  const ps = (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado');
+  if(!ps.length) return '';
+  if(!ehAberta(c.situacao))
+    return '<button class="ch-avancar reabrir" data-id="' + c.id + '" title="Reabrir chamado">Reabrir</button>';
+  const prox = ps.length === 1 ? sitInfo(ps[0].para).rotulo : 'escolher caminho';
+  return '<button class="ch-avancar" data-id="' + c.id + '" title="Pr\u00f3ximo: ' + esc(prox) + '">Avan\u00e7ar \u2192</button>';
+}
+
 /* ---- caixa de andamento: para onde, quem, o que fez ---- */
 const ovPasso = $('ovPasso');
 let pDestinos = [];
@@ -975,7 +999,11 @@ $('pConfirmar').onclick = async () => {
   let para = pDestinos.length === 1 ? pDestinos[0].para
            : (document.querySelector('input[name=pDest]:checked') || {}).value;
   if(!para){ alert('Escolha o que aconteceu.'); return; }
-  const item = Object.assign(camposDoForm(), {situacao: para});
+  const base = ovCham.classList.contains('on')
+    ? camposDoForm()
+    : { os:c.os, cliente:c.cliente, cidade:c.cidade, uf:c.uf, parceiro:c.parceiro,
+        aberto_em:c.aberto_em, pedido:c.pedido, rastreio:c.rastreio, obs:c.obs };
+  const item = Object.assign(base, {situacao: para});
   if(!item.os){ alert('Informe o n\u00famero da O.S.'); return; }
   if(!item.cliente){ alert('Informe o cliente.'); return; }
   lembrarNome(nome);
