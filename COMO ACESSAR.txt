@@ -122,10 +122,11 @@ O CHAMADO ANDA POR UM PASSO A PASSO FIXO
   1. Solicitar filtragem        <- todo chamado novo comeca aqui
   2. Lancar peca no sistema     (a filtragem deu certo e precisa de peca.
                                  E so avisar que a peca foi lancada)
-  3. Peca enviada               (a peca foi despachada. O campo CODIGO DE
-                                 RASTREIO aparece aqui, mas e OPCIONAL --
+  3. Peca enviada               (a peca foi despachada)
+  4. Peca chegou                (confirmacao de que a peca chegou. E na
+                                 passagem do 3 para o 4 que a caixa mostra o
+                                 campo CODIGO DE RASTREIO -- OPCIONAL,
                                  preencha se tiver o codigo em maos)
-  4. Peca chegou                (confirmacao de que a peca chegou)
   5. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
                                  resolveu ou nao precisa de peca; se o
                                  terceirizado atender e disser que precisa de

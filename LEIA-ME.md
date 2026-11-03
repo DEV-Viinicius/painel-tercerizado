@@ -224,7 +224,9 @@ para onde, com o texto de cada botão) e `CANCELAVEIS`.
   propósito. O rastreio já foi obrigatório no passo 3 e deixou de ser: nem
   toda peça sai com código, e um chamado não pode ficar parado por isso. Ele
   virou um campo **oferecido** (`OFERECE`): a caixa de andamento mostra
-  "Código de rastreio (opcional)" no passo 3 para quem tiver o dado em mãos.
+  "Código de rastreio (opcional)" na passagem do 3 para o **4**, que é quando
+  se confere a entrega e o código costuma estar em mãos. `OFERECE` é indexado
+  pelo passo de **destino**, igual ao `EXIGE`.
   `EXIGE` continua existindo e funcionando — é só colocar um passo lá dentro
   se um dia algum campo precisar voltar a ser obrigatório.
 - **Cancelar** vale em qualquer passo de 1 a 8 (equipamento que vai ser

@@ -95,7 +95,9 @@ EXIGE = {}
 # quem tiver o dado em maos, mas ninguem e barrado por deixar em branco.
 # passo -> (campo, rotulo na caixa)
 OFERECE = {
-    'peca_enviada': ('rastreio', 'Código de rastreio'),
+    # Pedido na passagem "Peca enviada -> Peca chegou": e na hora de conferir
+    # a entrega que o codigo costuma estar em maos.
+    'peca_chegou': ('rastreio', 'Código de rastreio'),
 }
 
 
