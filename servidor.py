@@ -718,10 +718,15 @@ class Handler(BaseHTTPRequestHandler):
 
         elif op == 'update':
             _id = req['id']
-            novo = dict(req['item'])
             atual = next((x for x in lista if x.get('id') == _id), None)
             if atual is None:
                 return
+            # MESCLA, nao substitui: a tela do lapis manda so os campos do
+            # formulario, e trocar o registro inteiro por ele apagava o que
+            # nao aparece no form -- `situacao` inclusive. Chamado sem situacao
+            # fica preso: nao avanca, nao cancela, nao reabre.
+            novo = dict(atual)
+            novo.update(req['item'])
             sit_antes = atual.get('situacao')
             hist = atual.get('historico', [])
             novo['id'] = _id
@@ -747,6 +752,15 @@ class Handler(BaseHTTPRequestHandler):
                 de = _ch.SITUACOES.get(sit_antes, (sit_antes,))[0]
                 para = _ch.SITUACOES.get(sit_depois, (sit_depois,))[0]
                 _ch.anotar(novo, f'{de} → {para}', quem=quem)
+                # Campos que nao valem para o novo passo (o rastreio da peca
+                # anterior, por exemplo). Guarda o valor no historico antes de
+                # zerar, senao o codigo se perde.
+                for campo, rotulo in _ch.LIMPA_AO_ENTRAR.get(sit_depois, []):
+                    velho = str(novo.get(campo) or '').strip()
+                    if velho:
+                        _ch.anotar(novo, f'{rotulo}: {velho} — campo liberado '
+                                         f'para a próxima peça', quem=quem)
+                    novo[campo] = ''
                 # Encerrou agora: marca a data. Reabriu: limpa, senao o contador
                 # de dias congelaria na data do encerramento antigo.
                 if sit_depois not in _ch.ABERTAS:

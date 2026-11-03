@@ -56,6 +56,9 @@ TRANSICOES = {
     ],
     'terceirizado': [
         ('concluido', 'Terceirizado concluiu o atendimento'),
+        # O terceirizado foi, olhou e descobriu que precisa de peca: volta para
+        # o envio. O chamado pode dar essa volta quantas vezes precisar.
+        ('enviar_peca', 'Atendeu mas precisa de peça — voltar para o envio'),
     ],
     'concluido': [
         ('confirmar', 'Ligar para o cliente confirmar'),
@@ -81,6 +84,15 @@ TRANSICOES = {
 EXIGE = {
     # Peca enviada sem rastreio e peca que ninguem sabe onde esta.
     'peca_enviada': ('rastreio', 'o código de rastreio'),
+}
+
+
+# Campos que ZERAM ao entrar num passo. Voltando a "enviar peca", o rastreio
+# da peca anterior nao pode valer pela proxima: senao EXIGE passa batido e a
+# peca nova segue sem codigo. O codigo antigo vai para o historico antes.
+# campo -> (como chamar o campo no historico)
+LIMPA_AO_ENTRAR = {
+    'enviar_peca': [('rastreio', 'Rastreio da peça anterior')],
 }
 
 

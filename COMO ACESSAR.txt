@@ -123,7 +123,9 @@ O CHAMADO ANDA POR UM PASSO A PASSO FIXO
   2. Enviar peca                (quando a filtragem deu certo e precisa de peca)
   3. Peca enviada               (exige o CODIGO DE RASTREIO)
   4. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
-                                 resolveu ou nao precisa de peca)
+                                 resolveu ou nao precisa de peca; se o
+                                 terceirizado atender e disser que precisa de
+                                 peca, VOLTA para o passo 2)
   5. Atendimento concluido
   6. Confirmar com o cliente    (se o cliente disser que NAO resolveu,
                                  volta para o passo 1)
@@ -131,6 +133,10 @@ O CHAMADO ANDA POR UM PASSO A PASSO FIXO
   8. Enviado ao ADM             <- fim; o chamado sai de "em andamento"
 
 Nao da para pular passo. O painel so oferece o proximo.
+No passo 4 a caixa pergunta o que aconteceu: "terceirizado concluiu" ou
+"atendeu mas precisa de peca". Voltando para o passo 2, o rastreio e apagado
+de proposito -- a peca nova precisa do codigo dela. O codigo antigo fica
+guardado no historico do chamado.
 "Cancelar" existe em qualquer passo de 1 a 7 (equipamento que vai ser
 substituido ou retirado). Encerrado ou cancelado so volta com "Reabrir".
 

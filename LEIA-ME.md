@@ -198,9 +198,9 @@ para onde, com o texto de cada botão) e `CANCELAVEIS`.
 1. Solicitar filtragem ─┬─ precisa de peça ──► 2. Enviar peça ──► 3. Peça enviada ─┐
                         └─ não resolveu / não precisa de peça ─────────────────────┤
                                                                                    ▼
-                                                        4. Enviado ao terceirizado
-                                                                                   ▼
-                                                        5. Atendimento concluído
+                        ┌── precisa de peça ───────────► 4. Enviado ao terceirizado
+                        │                                                          ▼
+              volta ao 2 ┘                               5. Atendimento concluído
                                                                                    ▼
                                        ┌── não resolveu ── 6. Confirmar com o cliente
                                        │                                           ▼
@@ -209,6 +209,13 @@ para onde, com o texto de cada botão) e `CANCELAVEIS`.
                                                         8. Enviado ao ADM  (fim)
 ```
 
+- Do passo **4 (enviado ao terceirizado)** saem dois caminhos: o terceirizado
+  concluiu (segue para o 5) ou ele atendeu e **descobriu que precisa de peça**
+  — aí volta ao **2**, e o chamado pode dar essa volta quantas vezes precisar.
+  Voltar ao 2 **zera o código de rastreio** (`LIMPA_AO_ENTRAR` em
+  `chamados.py`): se o código da peça antiga ficasse no campo, ele satisfaria
+  o `EXIGE` e a peça nova viajaria sem rastreio. O código anterior é gravado
+  no histórico antes de sair do campo.
 - **Cancelar** vale em qualquer passo de 1 a 7 (equipamento que vai ser
   substituído/retirado não percorre o fluxo). Do 8 e do cancelado só se sai
   **reabrindo**, que volta ao passo 1.
@@ -263,6 +270,16 @@ topo mostra quantos são. Chamado criado no painel já nasce com a data de hoje.
 
 ## Histórico
 
+- **03/11/2026** — o passo 4 ganhou a volta ao 2 (terceirizado atendeu mas
+  precisa de peça). Corrigido um bug que **prendia o chamado**: no `update`, o
+  servidor trocava o registro inteiro pelo que a tela mandava, e o botão
+  "Salvar" do lápis manda só os campos do formulário — sem `situacao`. Quem
+  corrigisse um dado pelo lápis apagava o passo do chamado, que então não
+  avançava, não cancelava e não reabria (`TRANSICOES` não tem saída para
+  `None`), aparecendo como `?` na tela. Agora o update **mescla** sobre o
+  registro existente, então nenhum campo fora do formulário se perde.
+  Aconteceu de verdade com o primeiro chamado real (O.S. 2710848, 03/11): foi
+  destravado devolvendo o passo que o próprio histórico registrava.
 - **05/10/2026** — código publicado no GitHub (repositório privado
   `DEV-Viinicius/painel-tercerizado`). Tirado o caminho fixo do usuário
   `suporte06` do `publicar.py`; criado o `requirements.txt`; sem `dados.json`
