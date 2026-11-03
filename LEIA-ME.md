@@ -188,48 +188,59 @@ dentro do nome do cliente, e o filtro escondia linhas.
 
 ### O passo a passo (é regra, não sugestão)
 
-O chamado anda por 8 passos fixos. De cada um só saem os caminhos que o
+O chamado anda por 9 passos fixos. De cada um só saem os caminhos que o
 processo real permite — e quem recusa o salto é o **servidor**
 (`_ch.pode_ir()` em `_op_chamado`), não a tela; a tela só mostra os botões
 certos. Tudo está em `chamados.py`: `TRILHA` (a ordem), `TRANSICOES` (de onde
 para onde, com o texto de cada botão) e `CANCELAVEIS`.
 
 ```
-1. Solicitar filtragem ─┬─ precisa de peça ──► 2. Enviar peça ──► 3. Peça enviada ─┐
-                        └─ não resolveu / não precisa de peça ─────────────────────┤
-                                                                                   ▼
-                        ┌── precisa de peça ───────────► 4. Enviado ao terceirizado
-                        │                                                          ▼
-              volta ao 2 ┘                               5. Atendimento concluído
-                                                                                   ▼
-                                       ┌── não resolveu ── 6. Confirmar com o cliente
-                                       │                                           ▼
-                            volta ao 1 ◄┘                   7. Gerar pedido de compra
-                                                                                   ▼
-                                                        8. Enviado ao ADM  (fim)
+1. Solicitar filtragem ─┬─ precisa de peça ──► 2. Lançar peça no sistema
+                        │                                    ▼
+                        │                           3. Peça enviada
+                        │                                    ▼
+                        │                           4. Peça chegou
+                        │                                    ▼
+                        └─ não precisa de peça ──► 5. Enviado ao terceirizado
+                                                             │
+                        ┌── atendeu mas precisa de peça ─────┤
+              volta ao 2 ┘                                   ▼
+                                                    6. Atendimento concluído
+                                                             ▼
+                        ┌── não resolveu ─── 7. Confirmar com o cliente
+                        │                                    ▼
+             volta ao 1 ◄┘                        8. Gerar pedido de compra
+                                                             ▼
+                                                    9. Enviado ao ADM  (fim)
 ```
 
-- Do passo **4 (enviado ao terceirizado)** saem dois caminhos: o terceirizado
-  concluiu (segue para o 5) ou ele atendeu e **descobriu que precisa de peça**
+- Do passo **5 (enviado ao terceirizado)** saem dois caminhos: o terceirizado
+  concluiu (segue para o 6) ou ele atendeu e **descobriu que precisa de peça**
   — aí volta ao **2**, e o chamado pode dar essa volta quantas vezes precisar.
   Voltar ao 2 **zera o código de rastreio** (`LIMPA_AO_ENTRAR` em
-  `chamados.py`): se o código da peça antiga ficasse no campo, ele satisfaria
-  o `EXIGE` e a peça nova viajaria sem rastreio. O código anterior é gravado
-  no histórico antes de sair do campo.
-- **Cancelar** vale em qualquer passo de 1 a 7 (equipamento que vai ser
-  substituído/retirado não percorre o fluxo). Do 8 e do cancelado só se sai
+  `chamados.py`): é outra peça, com outro código, e o da anterior no campo só
+  confundiria. O código antigo é gravado no histórico antes de sair do campo.
+- **Nenhum passo trava por campo em branco** — `EXIGE` está vazio de
+  propósito. O rastreio já foi obrigatório no passo 3 e deixou de ser: nem
+  toda peça sai com código, e um chamado não pode ficar parado por isso. Ele
+  virou um campo **oferecido** (`OFERECE`): a caixa de andamento mostra
+  "Código de rastreio (opcional)" no passo 3 para quem tiver o dado em mãos.
+  `EXIGE` continua existindo e funcionando — é só colocar um passo lá dentro
+  se um dia algum campo precisar voltar a ser obrigatório.
+- **Cancelar** vale em qualquer passo de 1 a 8 (equipamento que vai ser
+  substituído/retirado não percorre o fluxo). Do 9 e do cancelado só se sai
   **reabrindo**, que volta ao passo 1.
 - Chamado novo **sempre** nasce no passo 1, com a data de hoje. O servidor
   ignora qualquer `situacao` enviada no `add`.
-- "Em andamento" = passos 1 a 7. "Encerrado" = passo 8 ou cancelado
+- "Em andamento" = passos 1 a 8. "Encerrado" = passo 9 ou cancelado
   (`ABERTAS`). Ao encerrar grava `fechado_em`; ao reabrir limpa, senão o
   contador de dias congelaria.
-- Cada mudança de passo vira uma linha no `historico` ("Enviar peça → Peça
-  enviada"), junto com a observação digitada na hora.
+- Cada mudança de passo vira uma linha no `historico` ("Lançar peça no
+  sistema → Peça enviada"), junto com a observação digitada na hora.
 
 | Na planilha | No painel |
 |---|---|
-| status escrito à mão | passo do fluxo (lista fixa de 8 + cancelado) |
+| status escrito à mão | passo do fluxo (lista fixa de 9 + cancelado) |
 | texto novo apagava o anterior | `historico`: cada mudança vira uma linha com data |
 | sem data | `aberto_em` + contador de dias; amarelo após 15 dias, vermelho após 30 |
 | cidade dentro do nome do cliente | campos `cidade` e `uf` próprios |

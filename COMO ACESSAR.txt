@@ -120,24 +120,31 @@ Substitui a planilha do Google. No alto da tela ha duas abas:
 O CHAMADO ANDA POR UM PASSO A PASSO FIXO
 ----------------------------------------
   1. Solicitar filtragem        <- todo chamado novo comeca aqui
-  2. Enviar peca                (quando a filtragem deu certo e precisa de peca)
-  3. Peca enviada               (exige o CODIGO DE RASTREIO)
-  4. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
+  2. Lancar peca no sistema     (a filtragem deu certo e precisa de peca.
+                                 E so avisar que a peca foi lancada)
+  3. Peca enviada               (a peca foi despachada. O campo CODIGO DE
+                                 RASTREIO aparece aqui, mas e OPCIONAL --
+                                 preencha se tiver o codigo em maos)
+  4. Peca chegou                (confirmacao de que a peca chegou)
+  5. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
                                  resolveu ou nao precisa de peca; se o
                                  terceirizado atender e disser que precisa de
                                  peca, VOLTA para o passo 2)
-  5. Atendimento concluido
-  6. Confirmar com o cliente    (se o cliente disser que NAO resolveu,
+  6. Atendimento concluido
+  7. Confirmar com o cliente    (se o cliente disser que NAO resolveu,
                                  volta para o passo 1)
-  7. Gerar pedido de compra
-  8. Enviado ao ADM             <- fim; o chamado sai de "em andamento"
+  8. Gerar pedido de compra
+  9. Enviado ao ADM             <- fim; o chamado sai de "em andamento"
 
 Nao da para pular passo. O painel so oferece o proximo.
-No passo 4 a caixa pergunta o que aconteceu: "terceirizado concluiu" ou
-"atendeu mas precisa de peca". Voltando para o passo 2, o rastreio e apagado
-de proposito -- a peca nova precisa do codigo dela. O codigo antigo fica
-guardado no historico do chamado.
-"Cancelar" existe em qualquer passo de 1 a 7 (equipamento que vai ser
+No passo 5 a caixa pergunta o que aconteceu: "terceirizado concluiu" ou
+"atendeu mas precisa de peca". Nesse segundo caso o chamado VOLTA para o
+passo 2 e o campo de rastreio e esvaziado -- e outra peca, com outro codigo.
+O codigo da peca anterior nao se perde: fica no historico do chamado.
+NENHUM passo trava por campo em branco. O rastreio ja foi obrigatorio e
+deixou de ser: nem toda peca sai com codigo, e um chamado nao pode ficar
+parado por causa disso.
+"Cancelar" existe em qualquer passo de 1 a 8 (equipamento que vai ser
 substituido ou retirado). Encerrado ou cancelado so volta com "Reabrir".
 
 BOTOES

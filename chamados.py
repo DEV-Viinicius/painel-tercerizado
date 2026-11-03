@@ -21,23 +21,24 @@ from datetime import date, datetime
 # chave -> (rotulo na tela, cor, ainda esta na sua mao?)
 # A ordem do dicionario e a ordem da trilha mostrada na tela.
 SITUACOES = {
-    'filtragem':    ('Solicitar filtragem',     '#6b7a90', True),
-    'enviar_peca':  ('Enviar peça',             '#d08a00', True),
-    'peca_enviada': ('Peça enviada',            '#8a4fd0', True),
-    'terceirizado': ('Enviado ao terceirizado', '#2f6fd0', True),
-    'concluido':    ('Atendimento concluído',   '#1f9254', True),
-    'confirmar':    ('Confirmar com o cliente', '#0f8f8f', True),
-    'pedido':       ('Gerar pedido de compra',  '#c85a00', True),
-    'adm':          ('Enviado ao ADM',          '#4a5568', False),
-    'cancelado':    ('Cancelado',               '#99a3b0', False),
+    'filtragem':    ('Solicitar filtragem',       '#6b7a90', True),
+    'enviar_peca':  ('Lançar peça no sistema',    '#d08a00', True),
+    'peca_enviada': ('Peça enviada',              '#8a4fd0', True),
+    'peca_chegou':  ('Peça chegou',               '#b05fa0', True),
+    'terceirizado': ('Enviado ao terceirizado',   '#2f6fd0', True),
+    'concluido':    ('Atendimento concluído',     '#1f9254', True),
+    'confirmar':    ('Confirmar com o cliente',   '#0f8f8f', True),
+    'pedido':       ('Gerar pedido de compra',    '#c85a00', True),
+    'adm':          ('Enviado ao ADM',            '#4a5568', False),
+    'cancelado':    ('Cancelado',                 '#99a3b0', False),
 }
 
 SIT_PADRAO = 'filtragem'
 ABERTAS = [k for k, v in SITUACOES.items() if v[2]]
 
 # Passos que formam a trilha principal (o cancelado fica fora: e saida lateral).
-TRILHA = ['filtragem', 'enviar_peca', 'peca_enviada', 'terceirizado',
-          'concluido', 'confirmar', 'pedido', 'adm']
+TRILHA = ['filtragem', 'enviar_peca', 'peca_enviada', 'peca_chegou',
+          'terceirizado', 'concluido', 'confirmar', 'pedido', 'adm']
 
 FINAL = 'adm'
 
@@ -45,20 +46,23 @@ FINAL = 'adm'
 # O que nao esta aqui o servidor recusa: o passo a passo e para valer.
 TRANSICOES = {
     'filtragem': [
-        ('enviar_peca',  'Filtragem OK — precisa enviar peça'),
+        ('enviar_peca',  'Filtragem OK — precisa de peça'),
         ('terceirizado', 'Não resolveu / não precisa de peça — enviar ao terceirizado'),
     ],
     'enviar_peca': [
         ('peca_enviada', 'Peça despachada'),
     ],
     'peca_enviada': [
-        ('terceirizado', 'Peça chegou — enviar ao terceirizado'),
+        ('peca_chegou', 'Peça chegou'),
+    ],
+    'peca_chegou': [
+        ('terceirizado', 'Enviar ao terceirizado'),
     ],
     'terceirizado': [
         ('concluido', 'Terceirizado concluiu o atendimento'),
         # O terceirizado foi, olhou e descobriu que precisa de peca: volta para
-        # o envio. O chamado pode dar essa volta quantas vezes precisar.
-        ('enviar_peca', 'Atendeu mas precisa de peça — voltar para o envio'),
+        # o lancamento. O chamado pode dar essa volta quantas vezes precisar.
+        ('enviar_peca', 'Atendeu mas precisa de peça — lançar outra peça'),
     ],
     'concluido': [
         ('confirmar', 'Ligar para o cliente confirmar'),
@@ -79,17 +83,25 @@ TRANSICOES = {
     ],
 }
 
-# Campos que precisam estar preenchidos para ENTRAR num passo.
+# Campos que o painel RECUSA deixar em branco para entrar num passo.
 # passo -> (campo, como chamar o campo na mensagem de erro)
-EXIGE = {
-    # Peca enviada sem rastreio e peca que ninguem sabe onde esta.
-    'peca_enviada': ('rastreio', 'o código de rastreio'),
+# Hoje esta vazio de proposito: nenhum passo trava por campo em branco.
+# O rastreio ja foi obrigatorio no passo "Peca enviada" e deixou de ser --
+# nem toda peca sai com codigo, e um chamado nao pode ficar parado por isso.
+EXIGE = {}
+
+
+# Campos que a caixa de andamento OFERECE ao entrar num passo: aparecem para
+# quem tiver o dado em maos, mas ninguem e barrado por deixar em branco.
+# passo -> (campo, rotulo na caixa)
+OFERECE = {
+    'peca_enviada': ('rastreio', 'Código de rastreio'),
 }
 
 
-# Campos que ZERAM ao entrar num passo. Voltando a "enviar peca", o rastreio
-# da peca anterior nao pode valer pela proxima: senao EXIGE passa batido e a
-# peca nova segue sem codigo. O codigo antigo vai para o historico antes.
+# Campos que ZERAM ao entrar num passo. Voltando ao lancamento da peca, o
+# rastreio da peca ANTERIOR nao pode ficar no campo fingindo ser o da nova.
+# O codigo antigo vai para o historico antes de sair.
 # campo -> (como chamar o campo no historico)
 LIMPA_AO_ENTRAR = {
     'enviar_peca': [('rastreio', 'Rastreio da peça anterior')],

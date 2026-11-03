@@ -586,6 +586,9 @@ class Handler(BaseHTTPRequestHandler):
                 ]
                 resp['_trilha'] = _ch.TRILHA
                 resp['_exige'] = {k: v[0] for k, v in _ch.EXIGE.items()}
+                # campo opcional que a caixa de andamento mostra no passo
+                resp['_oferece'] = {k: {'campo': v[0], 'rotulo': v[1]}
+                                    for k, v in _ch.OFERECE.items()}
                 self._envia(json.dumps(resp, ensure_ascii=False))
             return
         self._envia('Nao encontrado', 'text/plain', 404)
