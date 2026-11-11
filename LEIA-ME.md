@@ -73,6 +73,7 @@ caminho de recuperação deixa de existir.
 | `chamados.py` | **módulo de chamados**: os dois fluxos (passos, transições, campos por passo), classificação do status antigo, dedução de cidade/UF, histórico e importação da planilha |
 | `unificar_atendimentos.py` | leitura das planilhas de origem |
 | `publicar.py` | faz tudo: gera a página, compila o .exe, empacota e publica |
+| `teste_fluxo.py` | 58 verificações do passo a passo dos dois fluxos (como rodar está no topo do arquivo) |
 | `_original\` | bytecode do .exe antigo, 73 KB, só como prova histórica |
 
 ---
