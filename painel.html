@@ -233,7 +233,8 @@
 </header>
 <nav class="abas">
   <button class="aba ativa" data-tela="telaEquip">🖨️ Equipamentos por estado</button>
-  <button class="aba" data-tela="telaCham">🛠️ Chamados <span id="abaChamN"></span></button>
+  <button class="aba" data-tela="telaCham" data-fluxo="solicitacao">🛠️ Chamados <span id="abaChamN"></span></button>
+  <button class="aba" data-tela="telaCham" data-fluxo="realizacao">🧰 Atendimentos que realizamos <span id="abaRealN"></span></button>
 </nav>
 <div class="tela on" id="telaEquip">
 <div class="estados">
@@ -335,20 +336,34 @@
   <h3 id="cTitulo">Novo chamado</h3>
   <div class="corpo">
     <div id="cTrilha"></div>
-    <div class="campo"><label>Nº da O.S. *</label><input type="text" id="cOS"></div>
+    <div class="campo"><label id="cOSLabel">Nº da O.S. *</label><input type="text" id="cOS"></div>
     <div class="campo"><label>Cliente *</label><input type="text" id="cCliente" list="listaClientes">
       <datalist id="listaClientes"></datalist></div>
     <div class="campo2">
       <div class="campo"><label>Cidade</label><input type="text" id="cCidade"></div>
       <div class="campo"><label>Estado (UF)</label><select id="cUF"></select></div>
     </div>
-    <div class="campo"><label>Parceiro / terceirizado</label><input type="text" id="cParceiro" list="listaParceiros">
+    <div class="campo"><label id="cParceiroLabel">Parceiro / terceirizado</label><input type="text" id="cParceiro" list="listaParceiros">
       <datalist id="listaParceiros"></datalist></div>
-    <div class="campo2">
-      <div class="campo"><label>Aberto em</label><input type="date" id="cAberto"></div>
-      <div class="campo"><label>Pedido de compra</label><input type="text" id="cPedido"></div>
+    <div class="campo"><label>Aberto em</label><input type="date" id="cAberto"></div>
+    <!-- Daqui para baixo, cada bloco pertence a um fluxo so. -->
+    <div id="cSoSolic">
+      <div class="campo2">
+        <div class="campo"><label>Pedido de compra</label><input type="text" id="cPedido"></div>
+        <div class="campo"><label>Código de rastreio</label><input type="text" id="cRastreio"></div>
+      </div>
     </div>
-    <div class="campo"><label>Código de rastreio</label><input type="text" id="cRastreio"></div>
+    <div id="cSoReal" style="display:none">
+      <div class="campo2">
+        <div class="campo"><label>ID do cliente</label><input type="text" id="cIdCliente"></div>
+        <div class="campo"><label>CNPJ do cliente</label><input type="text" id="cCnpj"></div>
+      </div>
+      <div class="campo2">
+        <div class="campo"><label>Série do equipamento</label><input type="text" id="cSerie"></div>
+        <div class="campo"><label>ID do equipamento</label><input type="text" id="cIdEquip"></div>
+      </div>
+      <div class="campo"><label>Nº do pedido de venda</label><input type="text" id="cPedVenda"></div>
+    </div>
     <div class="campo"><label>Observação</label><textarea id="cObs"></textarea></div>
     <div class="passos-box" id="cPassos"></div>
     <div id="cHist"></div>
@@ -384,8 +399,9 @@
   <div class="corpo">
     <p class="de-para" id="pDePara"></p>
     <div class="destinos" id="pDestinos"></div>
-    <div class="campo" id="pCampoRastreio" style="display:none"><label id="pLabelRastreio">Código de rastreio</label>
-      <input type="text" id="pRastreio" placeholder="Ex.: AD123456789BR"></div>
+    <!-- Os campos daqui mudam com o passo de destino: quem manda e o
+         EXIGE/OFERECE do chamados.py, que chega em `_campos`. -->
+    <div id="pCampos"></div>
     <div class="campo"><label>Seu nome *</label><input type="text" id="pNome" placeholder="Quem está registrando"></div>
     <div class="campo"><label>O que foi feito *</label>
       <textarea id="pTexto" placeholder="Ex.: liguei para o cliente, confirmou que a impressora voltou a imprimir"></textarea></div>
@@ -416,20 +432,31 @@ async function carregar(){
   const r = await fetch('/api/dados'); const d = await r.json();
   TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[];
   CHAM = d.chamados||[]; if(d._situacoes) SITS = d._situacoes;
-  if(d._trilha) TRILHA = d._trilha;
-  if(d._exige) EXIGE = d._exige;
-  if(d._oferece) OFERECE = d._oferece;
+  if(d._fluxos) FLUXOS = d._fluxos;
+  if(d._campos) CAMPOS = d._campos;
 }
 async function api(url, body){
   try {
     const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    // Recusa do passo a passo ("falta o nº do pedido") chega como 500 com a
+    // explicacao no corpo. Ler o corpo ANTES do status e o que faz a pessoa
+    // ver o motivo em vez de um "http 500" seco.
+    let d = null;
+    try { d = await r.json(); } catch(e){ d = null; }
+    if(d && d.erro) throw new Error(d.erro);
     if(!r.ok) throw new Error('http '+r.status);
-    const d = await r.json();
-    if(d.erro) throw new Error(d.erro);
     TEC = d.tecnicos||{}; EQUIP = d.equipamentos||[]; FILTROS = d.filtros||[]; CHAM = d.chamados||CHAM;
     aviso('✔ Salvo no servidor');
     return true;
-  } catch(e){ alert('Não consegui salvar no servidor. Verifique se o Painel.bat continua aberto.\\n\\n'+e); return false; }
+  } catch(e){
+    // Recusa do processo: mostra a frase do servidor, que explica o que falta.
+    // Falha de rede: o painel provavelmente foi fechado.
+    const msg = String(e).replace(/^Error: /, '');
+    alert(/Failed to fetch|NetworkError|^http /.test(msg)
+      ? 'Não consegui falar com o painel. Ele continua aberto?\n\n' + msg
+      : msg);
+    return false;
+  }
 }
 function contarUF(){ const c={}; EQUIP.forEach(e=>{ c[e.uf]=(c[e.uf]||0)+1; }); return c; }
 
@@ -743,9 +770,24 @@ fSalvos.addEventListener('change', ()=>{
    tem: data de abertura, contador de dias parado, situacao de lista fixa e
    historico (cada andamento vira uma linha, em vez de apagar o anterior).
    ========================================================================= */
-let CHAM = [], SITS = [], TRILHA = [], EXIGE = {}, OFERECE = {}, chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
+let CHAM = [], SITS = [], FLUXOS = {}, CAMPOS = {},
+    chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' }, chOrdem = 'dias';
+// Qual dos dois fluxos esta na tela: 'solicitacao' (pedimos a um terceirizado)
+// ou 'realizacao' (nos atendemos para outra empresa). Cada aba liga o seu.
+let chFluxo = 'solicitacao';
 const sitInfo = k => SITS.find(s => s.chave === k) || { rotulo:k||'?', cor:'#6b7a90', aberta:true };
 const ehAberta = k => !!sitInfo(k).aberta;
+// Tudo que muda entre um fluxo e outro vem do servidor; a tela nao tem copia.
+const fx = () => FLUXOS[chFluxo] || { trilha:[], rotulo:'Chamados', parceiro:'Parceiro', cancelado:'cancelado' };
+const trilhaAtual = () => fx().trilha || [];
+const fluxoDe = c => c.fluxo || (sitInfo(c.situacao).fluxo || 'solicitacao');
+// Os caminhos que o passo oferece, fora o "cancelar" (que tem botao proprio).
+const avancos = c => (sitInfo(c.situacao).proximos || []).filter(x => !x.cancela);
+const ehRealiz = () => chFluxo === 'realizacao';
+// Como chamar o registro na tela. No fluxo que NOS atendemos ninguem diz
+// "chamado": e um atendimento que vendemos.
+const termo = c => ((c ? fluxoDe(c) : chFluxo) === 'realizacao' ? 'atendimento' : 'chamado');
+const Termo = c => { const t = termo(c); return t[0].toUpperCase() + t.slice(1); };
 
 function hojeISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function diasParado(c){
@@ -770,12 +812,27 @@ document.querySelectorAll('.aba').forEach(b => b.onclick = () => {
   const ehCham = b.dataset.tela === 'telaCham';
   $('btnsEquip').style.display = ehCham ? 'none' : '';
   $('btnsCham').style.display  = ehCham ? '' : 'none';
-  if(ehCham) renderCham();
+  if(ehCham){
+    // As duas abas de chamado dividem a mesma tela: o que troca e o fluxo.
+    if(b.dataset.fluxo && b.dataset.fluxo !== chFluxo){
+      chFluxo = b.dataset.fluxo;
+      chFiltro = { busca:'', uf:'', parceiro:'', sit:'', atalho:'' };
+      $('chBusca').value = ''; $('chUF').value = ''; $('chParceiro').value = ''; $('chSit').value = '';
+    }
+    // Importar planilha so existe no fluxo original (a planilha e daquele).
+    $('btnImpCham').style.display = ehRealiz() ? 'none' : '';
+    $('btnNovoCham').textContent = ehRealiz() ? '➕ Novo atendimento' : '➕ Novo chamado';
+    renderCham();
+  }
 });
 
 /* ---- filtros ---- */
+// Os chamados do fluxo que esta na tela. Chamado antigo, sem o campo `fluxo`,
+// e do fluxo original -- foi assim que ele nasceu.
+function chDoFluxo(){ return CHAM.filter(c => fluxoDe(c) === chFluxo); }
+
 function chListaBase(){
-  let L = CHAM.slice();
+  let L = chDoFluxo();
   const a = chFiltro.atalho;
   if(a === 'abertos')   L = L.filter(c => ehAberta(c.situacao));
   if(a === 'parados')   L = L.filter(c => ehAberta(c.situacao) && (diasParado(c) ?? -1) > 15);
@@ -786,7 +843,9 @@ function chListaBase(){
   if(chFiltro.parceiro) L = L.filter(c => (c.parceiro||'') === chFiltro.parceiro);
   if(chFiltro.sit)      L = L.filter(c => c.situacao === chFiltro.sit);
   const q = chFiltro.busca.trim().toLowerCase();
-  if(q) L = L.filter(c => [c.os,c.cliente,c.parceiro,c.rastreio,c.pedido,c.cidade,c.obs].join(' ').toLowerCase().includes(q));
+  if(q) L = L.filter(c => [c.os,c.cliente,c.parceiro,c.rastreio,c.pedido,c.cidade,c.obs,
+                           c.serie,c.id_cliente,c.cnpj,c.id_equip,c.pedido_venda]
+                          .join(' ').toLowerCase().includes(q));
   return L;
 }
 function chOrdenar(L){
@@ -804,14 +863,15 @@ function renderFunil(){
   // Quantos chamados parados em cada passo. E o retrato do processo:
   // onde a fila esta crescendo, aparece aqui.
   const cont = {};
-  CHAM.forEach(c => { cont[c.situacao] = (cont[c.situacao]||0) + 1; });
-  const passos = TRILHA.map(k => ({k:k, i:sitInfo(k)}));
-  if(cont['cancelado']) passos.push({k:'cancelado', i:sitInfo('cancelado')});
+  chDoFluxo().forEach(c => { cont[c.situacao] = (cont[c.situacao]||0) + 1; });
+  const kCanc = fx().cancelado;
+  const passos = trilhaAtual().map(k => ({k:k, i:sitInfo(k)}));
+  if(cont[kCanc]) passos.push({k:kCanc, i:sitInfo(kCanc)});
   $('chFunil').innerHTML = passos.map((p, n) =>
-    (n > 0 && p.k !== 'cancelado' ? '<span class="funil-seta">\u203a</span>' : '') +
+    (n > 0 && p.k !== kCanc ? '<span class="funil-seta">\u203a</span>' : '') +
     '<div class="funil-p' + (chFiltro.sit===p.k?' ativo':'') + '" data-k="' + p.k + '" ' +
     'style="border-left-color:' + p.i.cor + '" title="' + esc(p.i.rotulo) + '">' +
-    (p.k === 'cancelado' ? '' : '<span class="ord">' + (n+1) + '</span>') +
+    (p.k === kCanc ? '' : '<span class="ord">' + (n+1) + '</span>') +
     '<span>' + esc(p.i.rotulo) + '</span>' +
     '<span class="qt" style="color:' + p.i.cor + '">' + (cont[p.k]||0) + '</span></div>').join('');
   $('chFunil').querySelectorAll('.funil-p').forEach(el => el.onclick = () => {
@@ -822,12 +882,13 @@ function renderFunil(){
 }
 
 function renderResumo(){
-  const ab = CHAM.filter(c => ehAberta(c.situacao));
+  const base = chDoFluxo();
+  const ab = base.filter(c => ehAberta(c.situacao));
   const cartoes = [
     { k:'abertos', n:ab.length,                                        r:'em andamento',         cor:'var(--azul2)' },
     { k:'parados', n:ab.filter(c => (diasParado(c) ?? -1) > 15).length, r:'parados +15 dias',     cor:'var(--vermelho)' },
     { k:'semdata', n:ab.filter(c => !c.aberto_em).length,               r:'sem data de abertura', cor:'var(--muted)' },
-    { k:'encerrado', n:CHAM.length - ab.length,                         r:'encerrados',           cor:'var(--verde)' },
+    { k:'encerrado', n:base.length - ab.length,                         r:'encerrados',           cor:'var(--verde)' },
   ];
   $('chResumo').innerHTML = cartoes.map(c =>
     '<div class="ch-cartao' + (chFiltro.atalho===c.k?' ativo':'') + '" data-k="' + c.k + '" style="border-left-color:' + c.cor + '">' +
@@ -836,7 +897,12 @@ function renderResumo(){
     chFiltro.atalho = (chFiltro.atalho === el.dataset.k) ? '' : el.dataset.k;
     renderCham();
   });
-  $('abaChamN').textContent = ab.length ? '(' + ab.length + ')' : '';
+  // Os dois contadores das abas, sempre: quem esta na aba A quer saber se
+  // apareceu coisa na B.
+  const porFluxo = f => CHAM.filter(c => fluxoDe(c) === f && ehAberta(c.situacao)).length;
+  const marca = (id, n) => { const e = $(id); if(e) e.textContent = n ? '(' + n + ')' : ''; };
+  marca('abaChamN', porFluxo('solicitacao'));
+  marca('abaRealN', porFluxo('realizacao'));
 }
 
 function popularSelects(){
@@ -845,16 +911,23 @@ function popularSelects(){
     e.innerHTML = prim + itens.map(i =>
       '<option value="' + esc(i.v) + '"' + (atual===i.v?' selected':'') + '>' + esc(i.t) + '</option>').join('');
   };
-  const ufs = [...new Set(CHAM.map(c => c.uf).filter(Boolean))].sort();
+  const base = chDoFluxo();
+  const ufs = [...new Set(base.map(c => c.uf).filter(Boolean))].sort();
   sel('chUF', ufs.map(u => ({v:u, t:u})), chFiltro.uf);
-  if(CHAM.some(c => !c.uf)) $('chUF').insertAdjacentHTML('beforeend',
+  if(base.some(c => !c.uf)) $('chUF').insertAdjacentHTML('beforeend',
     '<option value="__sem"' + (chFiltro.uf==='__sem'?' selected':'') + '>\u2014 sem estado \u2014</option>');
-  const ps = [...new Set(CHAM.map(c => c.parceiro).filter(Boolean))].sort();
+  const ps = [...new Set(base.map(c => c.parceiro).filter(Boolean))].sort();
   sel('chParceiro', ps.map(x => ({v:x, t:x})), chFiltro.parceiro);
-  sel('chSit', SITS.map(s => ({v:s.chave, t:(s.passo ? s.passo + '. ' : '') + s.rotulo})), chFiltro.sit);
-  $('listaClientes').innerHTML  = [...new Set(CHAM.map(c=>c.cliente).filter(Boolean))].sort()
+  // So os passos DESTE fluxo: a lista do outro so confundiria.
+  sel('chSit', SITS.filter(s => s.fluxo === chFluxo)
+                   .map(s => ({v:s.chave, t:(s.passo ? s.passo + '. ' : '') + s.rotulo})), chFiltro.sit);
+  $('listaClientes').innerHTML  = [...new Set(base.map(c=>c.cliente).filter(Boolean))].sort()
                                     .map(x=>'<option value="' + esc(x) + '">').join('');
-  $('listaParceiros').innerHTML = ps.map(x=>'<option value="' + esc(x) + '">').join('');
+  // Para vincular o chamado a quem vai atender: quem ja atendeu antes MAIS os
+  // tecnicos/parceiros cadastrados na outra aba.
+  const tecs = Object.values(TEC||{}).flat().map(t => t.nome).filter(Boolean);
+  $('listaParceiros').innerHTML = [...new Set(ps.concat(tecs))].sort()
+                                    .map(x=>'<option value="' + esc(x) + '">').join('');
 }
 
 function renderCham(){
@@ -863,7 +936,7 @@ function renderCham(){
   popularSelects();
   const L = chOrdenar(chListaBase());
 
-  const semUF = CHAM.filter(c => ehAberta(c.situacao) && !c.uf).length;
+  const semUF = chDoFluxo().filter(c => ehAberta(c.situacao) && !c.uf).length;
   const alerta = semUF ? '<div class="aviso-caixa">\u26a0\ufe0f ' + semUF + ' chamado(s) em aberto est\u00e3o <b>sem estado</b>. ' +
       'A planilha antiga n\u00e3o tinha coluna de cidade \u2014 o estado foi deduzido do nome do cliente e nesses n\u00e3o deu. ' +
       'Abra o chamado e preencha para ele aparecer nos filtros por estado.</div>' : '';
@@ -877,7 +950,8 @@ function renderCham(){
     let cls = 'sem', txt = 'sem data';
     if(d !== null){ txt = d + (d === 1 ? ' dia' : ' dias'); cls = (ab && d > 30) ? 'grave' : (ab && d > 15) ? 'alerta' : ''; }
     return '<tr data-id="' + c.id + '">' +
-      '<td class="ch-os">' + esc(c.os) + '</td>' +
+      // No fluxo que realizamos a O.S. so existe a partir do passo "Gerar O.S."
+      '<td class="ch-os">' + (c.os ? esc(c.os) : '<span class="ch-sub">sem O.S.</span>') + '</td>' +
       '<td>' + esc(c.cliente) + (c.obs ? '<div class="ch-sub">' + esc(c.obs.slice(0,70)) + (c.obs.length>70?'\u2026':'') + '</div>' : '') + '</td>' +
       '<td>' + esc(c.cidade||'') + (c.uf ? ' <b>' + esc(c.uf) + '</b>' : '<span class="ch-sub">\u2014</span>') + '</td>' +
       '<td>' + esc(c.parceiro||'\u2014') + '</td>' +
@@ -885,17 +959,21 @@ function renderCham(){
         (si.passo ? si.passo + '. ' : '') + esc(si.rotulo) + '</span></td>' +
       '<td>' + (dataBR(c.aberto_em) || '<span class="ch-sub">\u2014</span>') + '</td>' +
       '<td class="ch-dias ' + cls + '">' + txt + '</td>' +
-      '<td>' + esc(c.rastreio||'') + '</td>' +
-      '<td>' + esc(c.pedido||'') + '</td>' +
+      // As duas ultimas colunas sao o que o fluxo rastreia de documento:
+      // peca e pedido de compra num; equipamento e pedido de venda no outro.
+      '<td>' + esc((ehRealiz() ? c.serie : c.rastreio) || '') + '</td>' +
+      '<td>' + esc((ehRealiz() ? c.pedido_venda : c.pedido) || '') + '</td>' +
       '<td><div class="ch-acoes">' + botaoAvancarHTML(c) +
-        '<button class="ch-acao" title="Corrigir dados do chamado">\u270f\ufe0f</button></div></td></tr>';
+        '<button class="ch-acao" title="Corrigir dados do ' + termo(c) + '">\u270f\ufe0f</button></div></td></tr>';
   }).join('');
   $('chConteudo').innerHTML = alerta +
-    '<div class="estado-cab"><h2>Chamados</h2><span class="sub">' + L.length + ' de ' + CHAM.length + ' chamado(s)</span></div>' +
+    '<div class="estado-cab"><h2>' + esc(fx().rotulo) + '</h2><span class="sub">' +
+      L.length + ' de ' + chDoFluxo().length + ' \u2014 ' + esc(fx().sub || '') + '</span></div>' +
     '<table class="ch-tabela"><thead><tr>' +
-    '<th>O.S.</th><th>Cliente</th><th>Cidade / UF</th><th>Parceiro</th><th>Passo do fluxo</th>' +
-    '<th>Aberto em</th><th>Parado h\u00e1</th><th>Rastreio</th><th>Pedido</th><th></th>' +
-    '</tr></thead><tbody>' + linhas + '</tbody></table>';
+    '<th>O.S.</th><th>Cliente</th><th>Cidade / UF</th><th>' + esc(fx().parceiro) + '</th><th>Passo do fluxo</th>' +
+    '<th>Aberto em</th><th>Parado h\u00e1</th>' +
+    (ehRealiz() ? '<th>S\u00e9rie</th><th>Ped. venda</th>' : '<th>Rastreio</th><th>Pedido</th>') +
+    '<th></th></tr></thead><tbody>' + linhas + '</tbody></table>';
   $('chConteudo').querySelectorAll('tbody tr').forEach(tr =>
     tr.onclick = () => abrirCham(tr.dataset.id));
   // O Avancar da linha abre a caixa direto, sem passar pelo chamado.
@@ -904,7 +982,7 @@ function renderCham(){
     const c = CHAM.find(x => x.id === b.dataset.id);
     if(!c) return;
     cEditId = c.id;
-    abrirPasso(c, (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado'));
+    abrirPasso(c, avancos(c));
   });
 }
 
@@ -915,11 +993,13 @@ UFS_BR.forEach(u => $('cUF').insertAdjacentHTML('beforeend', '<option>' + u + '<
 
 function trilhaHTML(c){
   const atual = c.situacao;
-  if(atual === 'cancelado'){
-    return '<div class="trilha-cancel">\u26d4 Chamado cancelado</div>';
+  const f = FLUXOS[fluxoDe(c)] || fx();
+  if(atual === f.cancelado){
+    return '<div class="trilha-cancel">\u26d4 ' + Termo(c) + ' cancelado</div>';
   }
-  const pos = TRILHA.indexOf(atual);
-  return '<div class="trilha">' + TRILHA.map((k, i) => {
+  const T = f.trilha || [];
+  const pos = T.indexOf(atual);
+  return '<div class="trilha">' + T.map((k, i) => {
     const cls = i < pos ? 'feito' : (i === pos ? 'agora' : '');
     return '<div class="trilha-p ' + cls + '" title="' + esc(sitInfo(k).rotulo) + '">' +
            '<span class="nq">' + (i+1) + '</span>' + esc(sitInfo(k).rotulo) + '</div>';
@@ -940,27 +1020,28 @@ function histHTML(c){
 function passosHTML(c){
   // Um botao so. Para onde ele leva, e o que foi feito, a pessoa diz na
   // caixa que abre em seguida. Quem decide se pode e o servidor.
-  const ps = (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado');
-  const podeCancelar = (sitInfo(c.situacao).proximos || []).some(x => x.para === 'cancelado');
+  const ps = avancos(c);
+  const podeCancelar = (sitInfo(c.situacao).proximos || []).some(x => x.cancela);
   let html = '';
   if(!ps.length){
-    html = '<p class="passos-nota">Este chamado chegou ao fim do fluxo.</p>';
+    html = '<p class="passos-nota">Este ' + termo(c) + ' chegou ao fim do fluxo.</p>';
   } else {
-    const reabrir = ps.length === 1 && ps[0].para === TRILHA[0] && !ehAberta(c.situacao);
-    const titulo = reabrir ? 'Reabrir chamado' : 'Avan\u00e7ar para a pr\u00f3xima etapa \u2192';
+    const f = FLUXOS[fluxoDe(c)] || fx();
+    const reabrir = ps.length === 1 && ps[0].para === (f.trilha||[])[0] && !ehAberta(c.situacao);
+    const titulo = reabrir ? ('Reabrir ' + termo(c)) : 'Avan\u00e7ar para a pr\u00f3xima etapa \u2192';
     const sub = ps.length === 1 ? sitInfo(ps[0].para).rotulo : 'a caixa pergunta qual caminho';
     html = '<button type="button" class="btn-avancar" id="btnAvancar">' + titulo +
            '<span class="prox">' + esc(sub) + '</span></button>';
   }
-  if(podeCancelar) html += '<button type="button" class="link-cancelar" id="btnCancelarCh">cancelar este chamado</button>';
+  if(podeCancelar) html += '<button type="button" class="link-cancelar" id="btnCancelarCh">cancelar este ' + termo(c) + '</button>';
   return html;
 }
 
 function botaoAvancarHTML(c){
-  const ps = (sitInfo(c.situacao).proximos || []).filter(x => x.para !== 'cancelado');
+  const ps = avancos(c);
   if(!ps.length) return '';
   if(!ehAberta(c.situacao))
-    return '<button class="ch-avancar reabrir" data-id="' + c.id + '" title="Reabrir chamado">Reabrir</button>';
+    return '<button class="ch-avancar reabrir" data-id="' + c.id + '" title="Reabrir ' + termo(c) + '">Reabrir</button>';
   const prox = ps.length === 1 ? sitInfo(ps[0].para).rotulo : 'escolher caminho';
   return '<button class="ch-avancar" data-id="' + c.id + '" title="Pr\u00f3ximo: ' + esc(prox) + '">Avan\u00e7ar \u2192</button>';
 }
@@ -971,39 +1052,52 @@ let pDestinos = [];
 function nomeLembrado(){ try { return localStorage.getItem('painel_nome') || ''; } catch(e){ return ''; } }
 function lembrarNome(n){ try { localStorage.setItem('painel_nome', n); } catch(e){} }
 
-// O campo de rastreio aparece onde o passo o exige (EXIGE) ou apenas o
-// oferece (OFERECE). Hoje so ha oferta: o codigo e bem-vindo em "Peca
-// enviada", mas nao trava o chamado de ninguem.
-function campoDoPasso(para){
-  if(EXIGE[para] === 'rastreio') return { rotulo:'Código de rastreio', obrigatorio:true };
-  const o = OFERECE[para];
-  if(o && o.campo === 'rastreio') return { rotulo:o.rotulo, obrigatorio:false };
-  return null;
+// Que campos a caixa pede para entrar num passo. A lista vem pronta do
+// servidor (`_campos`): com `obrig` o campo trava a passagem, sem ele apenas
+// aparece. A tela nao sabe quais sao nem precisa saber.
+const camposDoPasso = para => CAMPOS[para] || [];
+const DICAS = {
+  rastreio:     'Ex.: AD123456789BR',
+  pedido:       'Nº do pedido de compra',
+  pedido_venda: 'Nº do pedido de venda',
+  parceiro:     'Quem vai atender',
+  cnpj:         '00.000.000/0000-00',
+  serie:        'Série do equipamento',
+  os:           'Número da O.S.',
+};
+// O campo do terceirizado/solicitante puxa a lista de quem ja foi usado.
+const LISTA_DE = { parceiro:'listaParceiros', cliente:'listaClientes' };
+
+function camposHTML(para, c){
+  return camposDoPasso(para).map(f =>
+    '<div class="campo"><label>' + esc(f.rotulo) + (f.obrig ? ' *' : ' (opcional)') + '</label>' +
+    '<input type="text" id="pc_' + f.campo + '" value="' + esc(c[f.campo] || '') + '"' +
+    (LISTA_DE[f.campo] ? ' list="' + LISTA_DE[f.campo] + '"' : '') +
+    ' placeholder="' + esc(DICAS[f.campo] || '') + '"></div>').join('');
 }
 
 function abrirPasso(c, destinos){
   pDestinos = destinos;
   const de = sitInfo(c.situacao).rotulo;
+  // Antes do passo "Gerar O.S." nao ha numero: quem identifica e o cliente.
+  const quem = c.os ? 'O.S. <b>' + esc(c.os) + '</b>' : '<b>' + esc(c.cliente || '') + '</b>';
   if(destinos.length === 1){
     const d = destinos[0];
-    $('pTitulo').textContent = d.para === 'cancelado' ? 'Cancelar chamado' : 'Registrar andamento';
-    $('pDePara').innerHTML = 'O.S. <b>' + esc(c.os) + '</b> \u2014 de <b>' + esc(de) + '</b> para <b>' + esc(sitInfo(d.para).rotulo) + '</b>';
+    $('pTitulo').textContent = d.cancela ? ('Cancelar ' + termo(c)) : 'Registrar andamento';
+    $('pDePara').innerHTML = quem + ' \u2014 de <b>' + esc(de) + '</b> para <b>' + esc(sitInfo(d.para).rotulo) + '</b>';
     $('pDestinos').innerHTML = '';
   } else {
     $('pTitulo').textContent = 'Registrar andamento';
-    $('pDePara').innerHTML = 'O.S. <b>' + esc(c.os) + '</b> est\u00e1 em <b>' + esc(de) + '</b>. O que aconteceu?';
+    $('pDePara').innerHTML = quem + ' est\u00e1 em <b>' + esc(de) + '</b>. O que aconteceu?';
     $('pDestinos').innerHTML = destinos.map((d, i) =>
       '<label><input type="radio" name="pDest" value="' + d.para + '"' + (i===0?' checked':'') + '>' +
       '<span>' + esc(d.rotulo) + '<br><small style="color:var(--muted)">vai para: ' + esc(sitInfo(d.para).rotulo) + '</small></span></label>').join('');
   }
-  $('pRastreio').value = c.rastreio || '';
   const atualizaExigencia = () => {
     const para = destinos.length === 1 ? destinos[0].para
                : (document.querySelector('input[name=pDest]:checked') || {}).value;
-    const campo = campoDoPasso(para);
-    $('pCampoRastreio').style.display = campo ? '' : 'none';
-    if(campo) $('pLabelRastreio').textContent =
-      campo.rotulo + (campo.obrigatorio ? ' *' : ' (opcional)');
+    // Cada caminho pede o seu: trocar de radio troca os campos da caixa.
+    $('pCampos').innerHTML = camposHTML(para, c);
   };
   $('pDestinos').querySelectorAll('input').forEach(r => r.onchange = atualizaExigencia);
   atualizaExigencia();
@@ -1023,20 +1117,26 @@ $('pConfirmar').onclick = async () => {
   let para = pDestinos.length === 1 ? pDestinos[0].para
            : (document.querySelector('input[name=pDest]:checked') || {}).value;
   if(!para){ alert('Escolha o que aconteceu.'); return; }
-  const rastreio = $('pRastreio').value.trim();
-  const campoPara = campoDoPasso(para);
-  if(campoPara && campoPara.obrigatorio && !rastreio){
-    alert('Para marcar \u00ab' + sitInfo(para).rotulo + '\u00bb informe ' + campoPara.rotulo.toLowerCase() + '.');
-    $('pRastreio').focus(); return;
+  // Os campos que este passo pediu. O obrigatorio tambem e conferido no
+  // servidor (falta_para); aqui e so para a pessoa nao perder o que escreveu.
+  const preenchidos = {};
+  for(const f of camposDoPasso(para)){
+    const el = $('pc_' + f.campo);
+    const v = el ? el.value.trim() : '';
+    if(f.obrig && !v){
+      alert('Para marcar \u00ab' + sitInfo(para).rotulo + '\u00bb informe ' + f.rotulo.toLowerCase() + '.');
+      if(el) el.focus();
+      return;
+    }
+    preenchidos[f.campo] = v;
   }
-  const base = ovCham.classList.contains('on')
-    ? camposDoForm()
-    : { os:c.os, cliente:c.cliente, cidade:c.cidade, uf:c.uf, parceiro:c.parceiro,
-        aberto_em:c.aberto_em, pedido:c.pedido, rastreio:c.rastreio, obs:c.obs };
-  const item = Object.assign(base, {situacao: para});
-  if(campoPara) item.rastreio = rastreio;
-  if(!item.os){ alert('Informe o n\u00famero da O.S.'); return; }
-  if(!item.cliente){ alert('Informe o cliente.'); return; }
+  // Com a ficha aberta vai o formulario inteiro (a pessoa pode ter corrigido
+  // algo); direto da lista vao so o passo e os campos que ele pediu -- o
+  // servidor mescla com o que ja esta gravado.
+  const fichaAberta = ovCham.classList.contains('on');
+  const base = fichaAberta ? camposDoForm() : {};
+  const item = Object.assign(base, preenchidos, {situacao: para});
+  if(fichaAberta && !item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
   lembrarNome(nome);
   if(await api('/api/chamado', {op:'update', id:cEditId, item:item, nota:texto, quem:nome})){
     aviso('\u2714 ' + sitInfo(para).rotulo);
@@ -1049,20 +1149,25 @@ window.abrirCham = function(id){
   const c = CHAM.find(x => x.id === id);
   if(!c) return;
   cEditId = id;
-  $('cTitulo').textContent = 'Chamado O.S. ' + (c.os || '');
+  $('cTitulo').textContent = c.os ? (Termo(c) + ' O.S. ' + c.os)
+                                  : (Termo(c) + ' de ' + (c.cliente || 'cliente'));
   $('cTrilha').innerHTML = trilhaHTML(c);
   $('cOS').value = c.os || ''; $('cCliente').value = c.cliente || '';
   $('cCidade').value = c.cidade || ''; $('cUF').value = c.uf || '';
   $('cParceiro').value = c.parceiro || '';
   $('cAberto').value = (c.aberto_em || '').slice(0,10);
   $('cPedido').value = c.pedido || ''; $('cRastreio').value = c.rastreio || '';
+  $('cIdCliente').value = c.id_cliente || ''; $('cCnpj').value = c.cnpj || '';
+  $('cSerie').value = c.serie || ''; $('cIdEquip').value = c.id_equip || '';
+  $('cPedVenda').value = c.pedido_venda || '';
   $('cObs').value = c.obs || '';
+  ajustarFichaAoFluxo();
   $('cHist').innerHTML = histHTML(c);
   $('cPassos').style.display = ''; $('cPassos').innerHTML = passosHTML(c);
   const ps = (sitInfo(c.situacao).proximos || []);
   const bA = $('btnAvancar'), bC = $('btnCancelarCh');
-  if(bA) bA.onclick = () => abrirPasso(c, ps.filter(x => x.para !== 'cancelado'));
-  if(bC) bC.onclick = () => abrirPasso(c, ps.filter(x => x.para === 'cancelado'));
+  if(bA) bA.onclick = () => abrirPasso(c, ps.filter(x => !x.cancela));
+  if(bC) bC.onclick = () => abrirPasso(c, ps.filter(x => x.cancela));
   $('cExcluir').style.display = '';
   ovCham.classList.add('on');
 };
@@ -1074,17 +1179,33 @@ function camposDoForm(){
     parceiro: $('cParceiro').value.trim(),
     aberto_em: $('cAberto').value, pedido: $('cPedido').value.trim(),
     rastreio: $('cRastreio').value.trim(), obs: $('cObs').value.trim(),
+    // fluxo 2: cadastro do cliente, do equipamento e o pedido de venda
+    id_cliente: $('cIdCliente').value.trim(), cnpj: $('cCnpj').value.trim(),
+    serie: $('cSerie').value.trim(), id_equip: $('cIdEquip').value.trim(),
+    pedido_venda: $('cPedVenda').value.trim(),
   };
+}
+
+// A ficha serve aos dois fluxos: o que nao e do fluxo da vez fica escondido.
+function ajustarFichaAoFluxo(){
+  const r = ehRealiz();
+  $('cSoSolic').style.display = r ? 'none' : '';
+  $('cSoReal').style.display  = r ? '' : 'none';
+  $('cParceiroLabel').textContent = fx().parceiro;
+  // No fluxo que realizamos a O.S. nasce depois, no passo "Gerar O.S.".
+  $('cOSLabel').textContent = r ? 'Nº da O.S. (sai no passo "Gerar O.S.")' : 'Nº da O.S. *';
 }
 
 $('btnNovoCham').onclick = () => {
   cEditId = null;
-  $('cTitulo').textContent = 'Novo chamado';
-  ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs'].forEach(i => $(i).value = '');
+  $('cTitulo').textContent = ehRealiz() ? 'Novo atendimento' : 'Novo chamado';
+  ['cOS','cCliente','cCidade','cParceiro','cPedido','cRastreio','cObs',
+   'cIdCliente','cCnpj','cSerie','cIdEquip','cPedVenda'].forEach(i => $(i).value = '');
   $('cUF').value = '';
+  ajustarFichaAoFluxo();
   $('cAberto').value = hojeISO();          // chamado novo ja nasce com data
   // Todo chamado comeca no passo 1: nao se cria no meio do processo.
-  $('cTrilha').innerHTML = trilhaHTML({situacao: TRILHA[0]});
+  $('cTrilha').innerHTML = trilhaHTML({fluxo: chFluxo, situacao: fx().padrao});
   $('cPassos').style.display = 'none';
   $('cHist').innerHTML = ''; $('cExcluir').style.display = 'none';
   ovCham.classList.add('on'); $('cOS').focus();
@@ -1094,19 +1215,21 @@ ovCham.onclick = e => { if(e.target === ovCham) ovCham.classList.remove('on'); }
 
 $('cSalvar').onclick = async () => {
   const item = camposDoForm();
-  if(!item.os){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
+  // A O.S. so e obrigatoria no fluxo que pedimos: no outro ela e gerada por
+  // nos la no passo "Gerar O.S.", e o atendimento nasce antes disso.
+  if(!item.os && !ehRealiz()){ alert('Informe o n\u00famero da O.S.'); $('cOS').focus(); return; }
   if(!item.cliente){ alert('Informe o cliente.'); $('cCliente').focus(); return; }
   // Salvar grava os dados e a observacao; quem muda de passo sao os botoes.
   const body = cEditId
     ? { op:'update', id:cEditId, item:item }
-    : { op:'add', item:item };
+    : { op:'add', item:Object.assign(item, {fluxo: chFluxo}) };
   if(await api('/api/chamado', body)){ ovCham.classList.remove('on'); renderCham(); }
 };
 
 $('cExcluir').onclick = async () => {
   if(!cEditId) return;
   const c = CHAM.find(x => x.id === cEditId);
-  if(!confirm('Excluir o chamado da O.S. ' + (c ? c.os : '') + '?\nO hist\u00f3rico dele some junto.')) return;
+  if(!confirm('Excluir o ' + termo(c) + ' ' + (c && c.os ? 'da O.S. ' + c.os : 'de ' + (c ? c.cliente : '')) + '?\nO hist\u00f3rico dele some junto.')) return;
   if(await api('/api/chamado', {op:'delete', id:cEditId})){ ovCham.classList.remove('on'); renderCham(); }
 };
 
@@ -1130,7 +1253,7 @@ $('impChImportar').onclick = async () => {
   const f = $('impChFile').files[0];
   if(!f){ alert('Escolha o arquivo .xlsx.'); return; }
   const modo = $('impChModo').value;
-  if(modo === 'substituir' && !confirm('Isso APAGA os ' + CHAM.length + ' chamados que est\u00e3o aqui, com o hist\u00f3rico, e p\u00f5e os da planilha no lugar.\n\nConfirma?')) return;
+  if(modo === 'substituir' && !confirm('Isso APAGA os ' + CHAM.filter(c => fluxoDe(c) === 'solicitacao').length + ' chamados terceirizados que est\u00e3o aqui, com o hist\u00f3rico, e p\u00f5e os da planilha no lugar.\n(Os atendimentos que n\u00f3s realizamos n\u00e3o s\u00e3o tocados.)\n\nConfirma?')) return;
   const b64 = await new Promise(ok => { const r = new FileReader();
     r.onload = () => ok(r.result.split(',')[1]); r.readAsDataURL(f); });
   const r = await fetch('/api/importar_chamados', {method:'POST', headers:{'Content-Type':'application/json'},

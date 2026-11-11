@@ -114,39 +114,60 @@ Para mexer em 1 item so, use Editar/Excluir/Adicionar direto na lista.
 ==================================================
 ABA CHAMADOS - ACOMPANHAMENTO DOS TERCEIRIZADOS
 ==================================================
-Substitui a planilha do Google. No alto da tela ha duas abas:
-"Equipamentos por estado" (o que ja existia) e "Chamados".
+Substitui a planilha do Google. No alto da tela ha TRES abas:
+"Equipamentos por estado" (o que ja existia), "Chamados" (atendimento que
+NOS pedimos a um terceirizado) e "Atendimentos que realizamos" (atendimento
+que OUTRA empresa pede para nos -- explicada mais abaixo).
 
 O CHAMADO ANDA POR UM PASSO A PASSO FIXO
 ----------------------------------------
   1. Solicitar filtragem        <- todo chamado novo comeca aqui
   2. Lancar peca no sistema     (a filtragem deu certo e precisa de peca.
                                  E so avisar que a peca foi lancada)
-  3. Peca enviada               (a peca foi despachada)
+  3. Enviar peca                (a peca sai para o cliente)
   4. Peca chegou                (confirmacao de que a peca chegou. E na
-                                 passagem do 3 para o 4 que a caixa mostra o
-                                 campo CODIGO DE RASTREIO -- OPCIONAL,
-                                 preencha se tiver o codigo em maos)
-  5. Enviado ao terceirizado    (da filtragem vai direto para ca quando nao
+                                 passagem do 3 para o 4 que a caixa pede o
+                                 CODIGO DE RASTREIO -- OBRIGATORIO)
+  5. Solicitar terceirizado     (da filtragem vai direto para ca quando nao
                                  resolveu ou nao precisa de peca; se o
                                  terceirizado atender e disser que precisa de
-                                 peca, VOLTA para o passo 2)
-  6. Atendimento concluido
+                                 peca, VOLTA para o passo 2. Ao entrar aqui a
+                                 caixa oferece o campo TERCEIRIZADO QUE VAI
+                                 ATENDER -- opcional, com a lista de quem ja
+                                 atendeu e dos tecnicos cadastrados)
+  6. Atendimento realizado?     (a confirmacao de que o atendimento
+                                 aconteceu. E AQUI que a caixa pergunta se
+                                 deu certo ou nao)
   7. Confirmar com o cliente    (se o cliente disser que NAO resolveu,
                                  volta para o passo 1)
   8. Gerar pedido de compra
-  9. Enviado ao ADM             <- fim; o chamado sai de "em andamento"
+  9. Enviado ao ADM             <- fim; o chamado sai de "em andamento".
+                                 Para marcar este passo a caixa pede o
+                                 NUMERO DO PEDIDO DE COMPRA -- OBRIGATORIO
 
 Nao da para pular passo. O painel so oferece o proximo.
-No passo 5 a caixa pergunta o que aconteceu: "terceirizado concluiu" ou
-"atendeu mas precisa de peca". Nesse segundo caso o chamado VOLTA para o
-passo 2 e o campo de rastreio e esvaziado -- e outra peca, com outro codigo.
-O codigo da peca anterior nao se perde: fica no historico do chamado.
-NENHUM passo trava por campo em branco. O rastreio ja foi obrigatorio e
-deixou de ser: nem toda peca sai com codigo, e um chamado nao pode ficar
-parado por causa disso.
+No passo 6 a caixa pergunta o que aconteceu, com TRES respostas:
+  - SIM, atendimento realizado          -> segue para o passo 7
+  - NAO foi realizado                   -> VOLTA para o passo 1 (filtragem),
+                                           porque e preciso filtrar de novo
+                                           para saber o que fazer
+  - Atendeu mas precisa de OUTRA peca   -> VOLTA para o passo 2
+Voltando para o passo 2, o campo de rastreio e esvaziado -- e outra peca,
+com outro codigo. O codigo da peca anterior nao se perde: fica no historico
+do chamado.
 "Cancelar" existe em qualquer passo de 1 a 8 (equipamento que vai ser
 substituido ou retirado). Encerrado ou cancelado so volta com "Reabrir".
+
+O que mudou em 11/11/2026 (documentacao "Fluxo terceirizado.pdf"):
+  - o passo 3 passou a se chamar "Enviar peca" (era "Peca enviada") e o
+    passo 5, "Solicitar terceirizado" (era "Enviado ao terceirizado");
+  - o passo 6 passou a se chamar "Atendimento realizado?" (era "Atendimento
+    concluido") e virou o lugar da pergunta "deu certo ou nao", que antes
+    ficava no passo 5;
+  - o codigo de rastreio voltou a ser OBRIGATORIO (na chegada da peca);
+  - o numero do pedido de compra passou a ser OBRIGATORIO para ir ao ADM;
+  - ao solicitar o terceirizado da para vincular quem vai atender.
+Nenhum chamado precisou ser mexido: so os nomes na tela mudaram.
 
 BOTOES
 ------
@@ -171,4 +192,39 @@ NO ALTO DA ABA
 
 [ Importar planilha de chamados ]  -> traz chamados de um .xlsx no formato
    da planilha antiga. Normalmente NAO e preciso: a aba comecou vazia de
-   proposito para a equipe usar do zero.
+   proposito para a equipe usar do zero. So existe na aba "Chamados" e nunca
+   mexe nos "Atendimentos que realizamos".
+
+
+==================================================
+ABA ATENDIMENTOS QUE REALIZAMOS
+==================================================
+E o caminho contrario: outra empresa pede o atendimento para NOS. Funciona
+igualzinho a aba de chamados (mesma caixa de andamento, mesmo historico,
+mesmo funil), so que o passo a passo e outro e a coluna do meio se chama
+SOLICITANTE -- quem nos contratou.
+
+  1. Confirmar valores e prazo  <- todo atendimento novo comeca aqui
+  2. Cadastrar cliente          (ao sair deste passo a caixa oferece
+                                 ID DO CLIENTE e CNPJ DO CLIENTE)
+  3. Cadastrar equipamento      (ao sair, oferece SERIE DO EQUIPAMENTO e
+                                 ID DO EQUIPAMENTO)
+  4. Gerar O.S.                 (ao sair, pede o NUMERO DA O.S. --
+                                 OBRIGATORIO. E so aqui que a O.S. existe:
+                                 ate entao a lista mostra "sem O.S.")
+  5. Encaminhado a area tecnica (a caixa pergunta se o atendimento foi
+                                 concluido: "nao" mantem o atendimento aqui
+                                 e registra a tentativa no historico)
+  6. Enviar O.S. preenchida
+  7. Gerar pedido de venda      (ao sair, pede o NUMERO DO PEDIDO DE VENDA
+                                 -- OBRIGATORIO)
+  8. Faturar pedido
+  9. NF enviada                 <- fim
+
+Cancelar e reabrir funcionam como na outra aba. Um atendimento nunca entra
+no fluxo dos chamados nem o contrario: sao duas filas separadas, cada uma
+com o seu funil e os seus filtros.
+
+No cadastro ("Novo atendimento") a O.S. NAO e obrigatoria -- preencha
+cliente, cidade/UF e solicitante; o resto o proprio passo a passo vai
+pedindo na hora certa.

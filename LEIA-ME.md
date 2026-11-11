@@ -70,7 +70,7 @@ caminho de recuperação deixa de existir.
 | `painel.html` | **a tela** — HTML, CSS e JavaScript. É aqui que se mexe no visual |
 | `gerar_pagina.py` | converte o `painel.html` em `pagina.py` |
 | `pagina.py` | **gerado automaticamente — não edite à mão** |
-| `chamados.py` | **módulo de chamados**: situações, classificação do status antigo, dedução de cidade/UF, histórico e importação da planilha |
+| `chamados.py` | **módulo de chamados**: os dois fluxos (passos, transições, campos por passo), classificação do status antigo, dedução de cidade/UF, histórico e importação da planilha |
 | `unificar_atendimentos.py` | leitura das planilhas de origem |
 | `publicar.py` | faz tudo: gera a página, compila o .exe, empacota e publica |
 | `_original\` | bytecode do .exe antigo, 73 KB, só como prova histórica |
@@ -186,63 +186,99 @@ diferentes para 332 chamados), **não existia data nenhuma** — não dava para
 saber se um chamado estava parado há 3 dias ou 3 meses —, a cidade morava
 dentro do nome do cliente, e o filtro escondia linhas.
 
+### Dois fluxos, um motor só
+
+O painel acompanha **dois** fluxos opostos, cada um com a sua aba:
+
+| fluxo | o que é | aba |
+|---|---|---|
+| `solicitacao` | **nós pedimos** o atendimento a um terceirizado (a Solivetti paga) | 🛠️ Chamados |
+| `realizacao` | **nós realizamos** o atendimento para outra empresa (a Solivetti fatura) | 🧰 Atendimentos que realizamos |
+
+As chaves de passo são **únicas entre os dois** (as do segundo levam o prefixo
+`r_`), então um único `SITUACOES` e um único `TRANSICOES` servem aos dois: só
+a trilha, o passo inicial e o "cancelado" é que são por fluxo (`FLUXOS` em
+`chamados.py`). Quem vê a chave sabe de que fluxo ela é (`fluxo_de`), e nenhum
+chamado consegue entrar no fluxo do outro. Cada chamado guarda `fluxo` no
+`dados.json`; registro antigo, sem o campo, é carimbado na leitura (`migrar`).
+
 ### O passo a passo (é regra, não sugestão)
 
-O chamado anda por 9 passos fixos. De cada um só saem os caminhos que o
-processo real permite — e quem recusa o salto é o **servidor**
-(`_ch.pode_ir()` em `_op_chamado`), não a tela; a tela só mostra os botões
-certos. Tudo está em `chamados.py`: `TRILHA` (a ordem), `TRANSICOES` (de onde
-para onde, com o texto de cada botão) e `CANCELAVEIS`.
+De cada passo só saem os caminhos que o processo real permite — e quem recusa
+o salto é o **servidor** (`_ch.pode_ir()` em `_op_chamado`), não a tela; a
+tela só mostra os botões certos. **A tela não precisa mudar para passo ou
+transição nova**: ela monta trilha, funil, radios e campos a partir do que o
+servidor manda (`_fluxos`, `_situacoes`, `_campos`).
 
 ```
 1. Solicitar filtragem ─┬─ precisa de peça ──► 2. Lançar peça no sistema
                         │                                    ▼
-                        │                           3. Peça enviada
+                        │                           3. Enviar peça
                         │                                    ▼
-                        │                           4. Peça chegou
+                        │                           4. Peça chegou  (rastreio *)
                         │                                    ▼
-                        └─ não precisa de peça ──► 5. Enviado ao terceirizado
-                                                             │
-                        ┌── atendeu mas precisa de peça ─────┤
-              volta ao 2 ┘                                   ▼
-                                                    6. Atendimento concluído
+                        └─ não precisa de peça ──► 5. Solicitar terceirizado
                                                              ▼
+             volta ao 1 ◄── não foi realizado ─ 6. Atendimento realizado?
+             volta ao 2 ◄── precisa de peça ────┤            ▼  sim
                         ┌── não resolveu ─── 7. Confirmar com o cliente
                         │                                    ▼
              volta ao 1 ◄┘                        8. Gerar pedido de compra
                                                              ▼
-                                                    9. Enviado ao ADM  (fim)
+                                            9. Enviado ao ADM (fim)  (pedido *)
 ```
 
-- Do passo **5 (enviado ao terceirizado)** saem dois caminhos: o terceirizado
-  concluiu (segue para o 6) ou ele atendeu e **descobriu que precisa de peça**
-  — aí volta ao **2**, e o chamado pode dar essa volta quantas vezes precisar.
+> Os rótulos dos passos 3, 5 e 6 mudaram em 11/11/2026 ("Peça enviada",
+> "Enviado ao terceirizado" e "Atendimento concluído" eram os nomes antigos).
+> As **chaves** continuam `peca_enviada`, `terceirizado` e `concluido` — é por
+> isso que nenhum chamado precisou ser migrado. Ao mexer em rótulo, mexa só no
+> texto: trocar a chave obrigaria a migrar o `dados.json` de todo mundo.
+
+```
+1. Confirmar valores e prazo ► 2. Cadastrar cliente  (id + cnpj)
+                                        ▼
+                               3. Cadastrar equipamento  (série + id)
+                                        ▼
+                               4. Gerar O.S.  (nº da O.S. *)
+                                        ▼
+         ┌── ainda não concluiu ─ 5. Encaminhado à área técnica
+  fica ◄─┘                                ▼
+                               6. Enviar O.S. preenchida
+                                        ▼
+                               7. Gerar pedido de venda  (nº do pedido *)
+                                        ▼
+                               8. Faturar pedido ► 9. NF enviada (fim)
+```
+
+- O passo **6 ("Atendimento realizado?")** é uma pergunta, e é dele que saem
+  os caminhos: **sim** (segue para o 7), **não foi realizado** (volta ao
+  **1**, porque é preciso filtrar de novo para saber o que fazer) ou
+  **atendeu mas precisa de outra peça** (volta ao **2**). O chamado pode dar
+  essas voltas quantas vezes precisar. (Até 11/11/2026 essa pergunta ficava
+  no passo 5 e só tinha os dois primeiros caminhos.)
   Voltar ao 2 **zera o código de rastreio** (`LIMPA_AO_ENTRAR` em
   `chamados.py`): é outra peça, com outro código, e o da anterior no campo só
   confundiria. O código antigo é gravado no histórico antes de sair do campo.
-- **Nenhum passo trava por campo em branco** — `EXIGE` está vazio de
-  propósito. O rastreio já foi obrigatório no passo 3 e deixou de ser: nem
-  toda peça sai com código, e um chamado não pode ficar parado por isso. Ele
-  virou um campo **oferecido** (`OFERECE`): a caixa de andamento mostra
-  "Código de rastreio (opcional)" na passagem do 3 para o **4**, que é quando
-  se confere a entrega e o código costuma estar em mãos. `OFERECE` é indexado
-  pelo passo de **destino**, igual ao `EXIGE`.
-  `EXIGE` continua existindo e funcionando — é só colocar um passo lá dentro
-  se um dia algum campo precisar voltar a ser obrigatório.
-- **Cancelar** vale em qualquer passo de 1 a 8 (equipamento que vai ser
-  substituído/retirado não percorre o fluxo). Do 9 e do cancelado só se sai
-  **reabrindo**, que volta ao passo 1.
-- Chamado novo **sempre** nasce no passo 1, com a data de hoje. O servidor
-  ignora qualquer `situacao` enviada no `add`.
-- "Em andamento" = passos 1 a 8. "Encerrado" = passo 9 ou cancelado
-  (`ABERTAS`). Ao encerrar grava `fechado_em`; ao reabrir limpa, senão o
-  contador de dias congelaria.
+- **Campos por passo** (`EXIGE` trava, `OFERECE` só mostra): os dois são
+  indexados pelo passo de **destino**, e é por isso que o campo aparece na
+  **saída** do passo que o produz — quem está em "Gerar O.S." só tem o número
+  na hora de dizer que gerou. Hoje travam: rastreio (entrando em "Peça
+  chegou"), nº do pedido de compra (entrando no ADM), nº da O.S. e nº do
+  pedido de venda no outro fluxo. Oferecidos, sem travar: o terceirizado que
+  vai atender, o id/CNPJ do cliente e a série/id do equipamento.
+- **Cancelar** vale em qualquer passo menos o último; cada fluxo tem o seu
+  "cancelado" (`CANCELAVEIS` mapeia passo → cancelado do fluxo dele), senão
+  reabrir um atendimento cairia na filtragem do outro fluxo.
+- Chamado novo **sempre** nasce no primeiro passo do seu fluxo, com a data de
+  hoje. O servidor ignora qualquer `situacao` enviada no `add`.
+- "Encerrado" = último passo ou cancelado (`ABERTAS`). Ao encerrar grava
+  `fechado_em`; ao reabrir limpa, senão o contador de dias congelaria.
 - Cada mudança de passo vira uma linha no `historico` ("Lançar peça no
-  sistema → Peça enviada"), junto com a observação digitada na hora.
+  sistema → Enviar peça"), junto com a observação digitada na hora.
 
 | Na planilha | No painel |
 |---|---|
-| status escrito à mão | passo do fluxo (lista fixa de 9 + cancelado) |
+| status escrito à mão | passo do fluxo (lista fixa + cancelado) |
 | texto novo apagava o anterior | `historico`: cada mudança vira uma linha com data |
 | sem data | `aberto_em` + contador de dias; amarelo após 15 dias, vermelho após 30 |
 | cidade dentro do nome do cliente | campos `cidade` e `uf` próprios |

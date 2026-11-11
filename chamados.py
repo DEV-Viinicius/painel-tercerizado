@@ -18,54 +18,121 @@ from datetime import date, datetime
 
 # ------------------------------------------------------------------ passos
 
+# O painel acompanha DOIS fluxos, que nascem de pedidos opostos:
+#
+#   solicitacao -> NOS pedimos o atendimento a um terceirizado. E o fluxo
+#                  original: quem paga e a Solivetti, e o fim da linha e o ADM.
+#   realizacao  -> NOS realizamos o atendimento para outra empresa. Fluxo novo,
+#                  desenhado em "Fluxo terceirizado.pdf" (11/11/2026): comeca
+#                  confirmando valor e prazo e termina na nota fiscal.
+#
+# As chaves de passo sao UNICAS entre os dois (as do segundo levam o prefixo
+# `r_`), entao UM dicionario de situacoes e UM de transicoes servem aos dois --
+# so a trilha, o passo inicial e o "cancelado" e que sao por fluxo. Quem ve a
+# chave sabe de que fluxo ela e, e nada precisa carregar o fluxo junto.
+
 # chave -> (rotulo na tela, cor, ainda esta na sua mao?)
-# A ordem do dicionario e a ordem da trilha mostrada na tela.
 SITUACOES = {
+    # ---- fluxo 1: pedimos atendimento a um terceirizado ----
     'filtragem':    ('Solicitar filtragem',       '#6b7a90', True),
     'enviar_peca':  ('Lançar peça no sistema',    '#d08a00', True),
-    'peca_enviada': ('Peça enviada',              '#8a4fd0', True),
+    'peca_enviada': ('Enviar peça',               '#8a4fd0', True),
     'peca_chegou':  ('Peça chegou',               '#b05fa0', True),
-    'terceirizado': ('Enviado ao terceirizado',   '#2f6fd0', True),
-    'concluido':    ('Atendimento concluído',     '#1f9254', True),
+    'terceirizado': ('Solicitar terceirizado',    '#2f6fd0', True),
+    # So uma confirmacao de que o atendimento aconteceu, antes de ligar para o
+    # cliente. A chave continua `concluido` (era "Atendimento concluido"), por
+    # isso nenhum chamado precisou ser migrado quando o rotulo mudou.
+    'concluido':    ('Atendimento realizado?',    '#1f9254', True),
     'confirmar':    ('Confirmar com o cliente',   '#0f8f8f', True),
     'pedido':       ('Gerar pedido de compra',    '#c85a00', True),
     'adm':          ('Enviado ao ADM',            '#4a5568', False),
     'cancelado':    ('Cancelado',                 '#99a3b0', False),
+
+    # ---- fluxo 2: nos realizamos o atendimento ----
+    # Cada rotulo diz o que FALTA fazer -- e assim que a fila e lida: quem esta
+    # em "Gerar O.S." ainda nao gerou. O ultimo e o unico no passado: acabou.
+    'r_valores':    ('Confirmar valores e prazo',    '#6b7a90', True),
+    'r_cliente':    ('Cadastrar cliente',            '#0f8f8f', True),
+    'r_equip':      ('Cadastrar equipamento',        '#2f6fd0', True),
+    'r_os':         ('Gerar O.S.',                   '#8a4fd0', True),
+    'r_tecnica':    ('Encaminhado à área técnica',   '#d08a00', True),
+    'r_os_env':     ('Enviar O.S. preenchida',       '#b05fa0', True),
+    'r_pedido':     ('Gerar pedido de venda',        '#c85a00', True),
+    'r_faturar':    ('Faturar pedido',               '#1f9254', True),
+    'r_nf':         ('NF enviada',                   '#4a5568', False),
+    'r_cancelado':  ('Cancelado',                    '#99a3b0', False),
 }
 
-SIT_PADRAO = 'filtragem'
+FLUXOS = {
+    'solicitacao': {
+        'rotulo':    'Chamados terceirizados',
+        'sub':       'atendimento que NÓS pedimos a um terceirizado',
+        # como chamar, nesse fluxo, a empresa/pessoa do outro lado
+        'parceiro':  'Parceiro / terceirizado',
+        'trilha':    ['filtragem', 'enviar_peca', 'peca_enviada', 'peca_chegou',
+                      'terceirizado', 'concluido', 'confirmar', 'pedido', 'adm'],
+        'cancelado': 'cancelado',
+    },
+    'realizacao': {
+        'rotulo':    'Atendimentos que realizamos',
+        'sub':       'atendimento que OUTRA empresa pede para nós',
+        'parceiro':  'Solicitante',
+        'trilha':    ['r_valores', 'r_cliente', 'r_equip', 'r_os', 'r_tecnica',
+                      'r_os_env', 'r_pedido', 'r_faturar', 'r_nf'],
+        'cancelado': 'r_cancelado',
+    },
+}
+
+FLUXO_PADRAO = 'solicitacao'
+PADRAO = {f: c['trilha'][0] for f, c in FLUXOS.items()}
+TRILHAS = {f: c['trilha'] for f, c in FLUXOS.items()}
+# De que fluxo e cada passo. O 'concluido' aposentado entra junto, senao um
+# chamado antigo ficaria sem fluxo nenhum.
+DE_QUE_FLUXO = {k: f for f, c in FLUXOS.items() for k in c['trilha']}
+DE_QUE_FLUXO.update({c['cancelado']: f for f, c in FLUXOS.items()})
+
+SIT_PADRAO = PADRAO[FLUXO_PADRAO]
 ABERTAS = [k for k, v in SITUACOES.items() if v[2]]
+TRILHA = TRILHAS[FLUXO_PADRAO]
+FINAL = TRILHA[-1]
 
-# Passos que formam a trilha principal (o cancelado fica fora: e saida lateral).
-TRILHA = ['filtragem', 'enviar_peca', 'peca_enviada', 'peca_chegou',
-          'terceirizado', 'concluido', 'confirmar', 'pedido', 'adm']
 
-FINAL = 'adm'
+def fluxo_de(sit):
+    """A que fluxo pertence esse passo (ou esse chamado)."""
+    if isinstance(sit, dict):
+        return sit.get('fluxo') or DE_QUE_FLUXO.get(sit.get('situacao'), FLUXO_PADRAO)
+    return DE_QUE_FLUXO.get(sit, FLUXO_PADRAO)
 
 # De cada passo, PARA ONDE da para ir -- e com que palavras o botao convida.
 # O que nao esta aqui o servidor recusa: o passo a passo e para valer.
 TRANSICOES = {
     'filtragem': [
         ('enviar_peca',  'Filtragem OK — precisa de peça'),
-        ('terceirizado', 'Não resolveu / não precisa de peça — enviar ao terceirizado'),
+        ('terceirizado', 'Não resolveu / não precisa de peça — solicitar terceirizado'),
     ],
     'enviar_peca': [
-        ('peca_enviada', 'Peça despachada'),
+        ('peca_enviada', 'Peça lançada no sistema'),
     ],
     'peca_enviada': [
-        ('peca_chegou', 'Peça chegou'),
+        ('peca_chegou', 'Peça enviada e chegou no cliente'),
     ],
     'peca_chegou': [
-        ('terceirizado', 'Enviar ao terceirizado'),
+        ('terceirizado', 'Solicitar atendimento ao terceirizado'),
     ],
     'terceirizado': [
-        ('concluido', 'Terceirizado concluiu o atendimento'),
-        # O terceirizado foi, olhou e descobriu que precisa de peca: volta para
-        # o lancamento. O chamado pode dar essa volta quantas vezes precisar.
-        ('enviar_peca', 'Atendeu mas precisa de peça — lançar outra peça'),
+        ('concluido', 'Terceirizado solicitado — aguardando o atendimento'),
     ],
+    # E AQUI que o caminho se divide: o passo e uma pergunta ("o atendimento
+    # foi realizado?"), entao e aqui que a caixa oferece as respostas.
     'concluido': [
-        ('confirmar', 'Ligar para o cliente confirmar'),
+        ('confirmar',   'Sim, atendimento realizado — confirmar com o cliente'),
+        # Nao foi realizado: o chamado recomeca, porque e preciso filtrar de
+        # novo para saber o que fazer.
+        ('filtragem',   'Não foi realizado — voltar à filtragem'),
+        # Caso diferente: o terceirizado ATENDEU, so que descobriu que precisa
+        # de outra peca. Ai volta para o lancamento, nao para a filtragem --
+        # e o chamado pode dar essa volta quantas vezes precisar.
+        ('enviar_peca', 'Atendeu mas precisa de outra peça — lançar peça'),
     ],
     'confirmar': [
         ('pedido',    'Cliente confirmou — gerar pedido de compra'),
@@ -81,24 +148,76 @@ TRANSICOES = {
     'cancelado': [
         ('filtragem', 'Reabrir chamado'),
     ],
+
+    # ---- fluxo 2: nos realizamos o atendimento ----
+    'r_valores': [
+        ('r_cliente', 'Cliente confirmou valor e prazo'),
+    ],
+    'r_cliente': [
+        ('r_equip', 'Cliente cadastrado — cadastrar o equipamento'),
+    ],
+    'r_equip': [
+        ('r_os', 'Equipamento cadastrado — gerar a O.S.'),
+    ],
+    'r_os': [
+        ('r_tecnica', 'O.S. gerada — encaminhar à área técnica'),
+    ],
+    'r_tecnica': [
+        ('r_os_env', 'Atendimento concluído — enviar O.S. preenchida'),
+        # O "nao" do fluxograma: o atendimento nao fechou, o chamado fica onde
+        # esta e a tentativa vira uma linha no historico.
+        ('r_tecnica', 'Ainda não concluiu — continua com a área técnica'),
+    ],
+    'r_os_env': [
+        ('r_pedido', 'O.S. enviada — gerar pedido de venda'),
+    ],
+    'r_pedido': [
+        ('r_faturar', 'Pedido de venda gerado — faturar'),
+    ],
+    'r_faturar': [
+        ('r_nf', 'Pedido faturado e NF enviada'),
+    ],
+    'r_nf': [
+        ('r_valores', 'Reabrir atendimento'),
+    ],
+    'r_cancelado': [
+        ('r_valores', 'Reabrir atendimento'),
+    ],
 }
 
-# Campos que o painel RECUSA deixar em branco para entrar num passo.
-# passo -> (campo, como chamar o campo na mensagem de erro)
-# Hoje esta vazio de proposito: nenhum passo trava por campo em branco.
-# O rastreio ja foi obrigatorio no passo "Peca enviada" e deixou de ser --
-# nem toda peca sai com codigo, e um chamado nao pode ficar parado por isso.
-EXIGE = {}
+# Campos que a caixa de andamento pede numa passagem de passo.
+# passo -> [(campo, rotulo)] -- EXIGE recusa em branco, OFERECE so mostra.
+#
+# Os dois sao indexados pelo passo de DESTINO, e e por isso que o campo
+# aparece na SAIDA do passo que o produz: quem esta em "Gerar O.S." so tem o
+# numero da O.S. na hora de dizer que gerou. Pedir na entrada seria pedir
+# antes de existir.
+EXIGE = {
+    # Rastreio voltou a ser obrigatorio (documentacao de 11/11/2026). Sai de
+    # "Peca enviada": e na conferencia da entrega que o codigo esta em maos.
+    'peca_chegou': [('rastreio', 'Código de rastreio')],
+    # Sai de "Gerar pedido de compra": sem o numero o ADM nao tem o que pagar.
+    'adm':         [('pedido', 'Número do pedido de compra')],
+    # Fluxo 2: sai de "Gerar O.S." e de "Gerar pedido de venda".
+    'r_tecnica':   [('os', 'Número da O.S.')],
+    'r_faturar':   [('pedido_venda', 'Número do pedido de venda')],
+}
 
 
-# Campos que a caixa de andamento OFERECE ao entrar num passo: aparecem para
-# quem tiver o dado em maos, mas ninguem e barrado por deixar em branco.
-# passo -> (campo, rotulo na caixa)
 OFERECE = {
-    # Pedido na passagem "Peca enviada -> Peca chegou": e na hora de conferir
-    # a entrega que o codigo costuma estar em maos.
-    'peca_chegou': ('rastreio', 'Código de rastreio'),
+    # "Vincular chamado ao terceirizado": na hora de mandar para o parceiro e
+    # que se sabe quem vai atender. Nao trava -- as vezes ainda e "a definir".
+    'terceirizado': [('parceiro', 'Terceirizado que vai atender')],
+    # Fluxo 2: saem de "Cadastrar cliente" e de "Cadastrar equipamento".
+    'r_equip':      [('id_cliente', 'ID do cliente'), ('cnpj', 'CNPJ do cliente')],
+    'r_os':         [('serie', 'Série do equipamento'), ('id_equip', 'ID do equipamento')],
 }
+
+
+def campos_do_passo(para):
+    """[(campo, rotulo, obrigatorio)] que a caixa de andamento mostra."""
+    return ([(c, r, True) for c, r in EXIGE.get(para, [])] +
+            [(c, r, False) for c, r in OFERECE.get(para, [])])
 
 
 # Campos que ZERAM ao entrar num passo. Voltando ao lancamento da peca, o
@@ -111,24 +230,30 @@ LIMPA_AO_ENTRAR = {
 
 
 def falta_para(para, ch):
-    """Nome do campo obrigatorio que esta vazio para ir ao passo `para`, ou None."""
-    campo, nome = EXIGE.get(para, (None, None))
-    if campo and not str(ch.get(campo) or '').strip():
-        return nome
+    """Nome do 1o campo obrigatorio vazio para ir ao passo `para`, ou None."""
+    for campo, nome in EXIGE.get(para, []):
+        if not str(ch.get(campo) or '').strip():
+            return nome
     return None
 
 
 # Cancelar vale em qualquer etapa que ainda esteja na sua mao: equipamento que
 # vai ser substituido ou retirado nao percorre o fluxo ate o fim.
-CANCELAVEIS = [k for k in TRILHA if k != FINAL]
+# passo -> o "cancelado" DO FLUXO dele (cada fluxo tem o seu, senao reabrir um
+# atendimento nosso cairia na filtragem do outro fluxo).
+CANCELAVEIS = {}
+for _f, _c in FLUXOS.items():
+    for _k in _c['trilha'][:-1]:
+        CANCELAVEIS[_k] = _c['cancelado']
+CANCELADOS = {c['cancelado'] for c in FLUXOS.values()}
 
 
 def pode_ir(de, para):
     """A mudanca de passo e permitida pelo processo?"""
     if de == para:
         return True
-    if para == 'cancelado':
-        return de in CANCELAVEIS
+    if para in CANCELADOS:
+        return CANCELAVEIS.get(de) == para
     return para in [p for p, _ in TRANSICOES.get(de, [])]
 
 
@@ -136,8 +261,26 @@ def proximos(de):
     """Lista [(passo, texto do botao)] que a tela deve oferecer."""
     saidas = list(TRANSICOES.get(de, []))
     if de in CANCELAVEIS:
-        saidas.append(('cancelado', 'Cancelar chamado'))
+        saidas.append((CANCELAVEIS[de], 'Cancelar chamado'))
     return saidas
+
+
+def migrar(dados):
+    """Poe chamado gravado por versao antiga no formato de hoje. Devolve quantos mexeu.
+
+    Hoje so falta uma coisa: dizer de que fluxo o chamado e. Quem nao tem o
+    campo nasceu antes dos dois fluxos existirem, entao e do original.
+    Os rotulos que mudaram em 11/11/2026 ("Peca enviada" -> "Enviar peca",
+    "Enviado ao terceirizado" -> "Solicitar terceirizado", "Atendimento
+    concluido" -> "Atendimento realizado?") nao precisam de migracao: as
+    CHAVES continuam as mesmas, so o texto na tela mudou.
+    """
+    n = 0
+    for ch in dados.get('chamados', []):
+        if not ch.get('fluxo'):
+            ch['fluxo'] = fluxo_de(ch.get('situacao'))
+            n += 1
+    return n
 
 
 def _nrm(s):
@@ -376,6 +519,7 @@ def importar(caminho, equipamentos, novo_id, aba='CHAMADOS TERCEIRIZADOS'):
             'cidade': cidade,
             'uf': uf,
             'parceiro': c.get('parceiro', ''),
+            'fluxo': 'solicitacao',
             'situacao': sit,
             'rastreio': c.get('rastreio', ''),
             'pedido': c.get('pedido', ''),

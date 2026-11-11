@@ -137,6 +137,9 @@ def carregar_dados():
         # Base feita antes do modulo de chamados existir: abre sem chamado nenhum
         # em vez de quebrar a tela.
         d.setdefault('chamados', [])
+        # Chamado gravado por versao antiga: carimba o fluxo e tira quem ficou
+        # no passo aposentado. Roda a cada leitura -- e barato e idempotente.
+        _ch.migrar(d)
         return d
     try:
         d = construir_seed()
@@ -454,7 +457,11 @@ def importar_chamados(conteudo, modo='merge'):
 
     if modo == 'substituir':
         rel['ignorados'] = 0
-        DADOS['chamados'] = novos
+        # A planilha e do fluxo "solicitacao". Os atendimentos que NOS
+        # realizamos ficam onde estao -- nunca vieram dela.
+        outros = [c for c in DADOS.get('chamados', [])
+                  if _ch.fluxo_de(c) != 'solicitacao']
+        DADOS['chamados'] = outros + novos
         return rel
 
     atuais = DADOS.setdefault('chamados', [])
@@ -580,15 +587,30 @@ class Handler(BaseHTTPRequestHandler):
                 resp = dict(DADOS)
                 resp['_situacoes'] = [
                     {'chave': k, 'rotulo': v[0], 'cor': v[1], 'aberta': v[2],
-                     'passo': (_ch.TRILHA.index(k) + 1) if k in _ch.TRILHA else 0,
-                     'proximos': [{'para': p, 'rotulo': r} for p, r in _ch.proximos(k)]}
+                     'fluxo': _ch.fluxo_de(k),
+                     'passo': (_ch.TRILHAS[_ch.fluxo_de(k)].index(k) + 1)
+                              if k in _ch.TRILHAS[_ch.fluxo_de(k)] else 0,
+                     'proximos': [{'para': p, 'rotulo': r,
+                                   'cancela': p in _ch.CANCELADOS}
+                                  for p, r in _ch.proximos(k)]}
                     for k, v in _ch.SITUACOES.items()
                 ]
+                # Os dois fluxos (chamados que pedimos / atendimentos que
+                # realizamos) vao inteiros para a tela: ela monta trilha, funil
+                # e campos a partir daqui, sem copia da regra do lado de la.
+                resp['_fluxos'] = {f: {'rotulo': c['rotulo'], 'sub': c['sub'],
+                                       'parceiro': c['parceiro'],
+                                       'trilha': c['trilha'],
+                                       'cancelado': c['cancelado'],
+                                       'padrao': c['trilha'][0]}
+                                   for f, c in _ch.FLUXOS.items()}
                 resp['_trilha'] = _ch.TRILHA
-                resp['_exige'] = {k: v[0] for k, v in _ch.EXIGE.items()}
-                # campo opcional que a caixa de andamento mostra no passo
-                resp['_oferece'] = {k: {'campo': v[0], 'rotulo': v[1]}
-                                    for k, v in _ch.OFERECE.items()}
+                resp['_trilhas'] = _ch.TRILHAS
+                # Campos que a caixa de andamento pede em cada passo, na ordem.
+                resp['_campos'] = {
+                    k: [{'campo': c, 'rotulo': r, 'obrig': o}
+                        for c, r, o in _ch.campos_do_passo(k)]
+                    for k in _ch.SITUACOES if _ch.campos_do_passo(k)}
                 self._envia(json.dumps(resp, ensure_ascii=False))
             return
         self._envia('Nao encontrado', 'text/plain', 404)
@@ -706,15 +728,20 @@ class Handler(BaseHTTPRequestHandler):
         if op == 'add':
             item = dict(req['item'])
             item['id'] = novo_id('c')
+            # Em qual dos dois fluxos ele nasce (pedimos / realizamos).
+            fluxo = item.get('fluxo')
+            if fluxo not in _ch.FLUXOS:
+                fluxo = _ch.FLUXO_PADRAO
+            item['fluxo'] = fluxo
             # Todo chamado comeca no primeiro passo do fluxo. Nao se cria um
             # chamado no meio do processo: e o passo a passo que vale.
-            item['situacao'] = _ch.SIT_PADRAO
+            item['situacao'] = _ch.PADRAO[fluxo]
             # Chamado novo ja nasce com data: e justamente o que faltava na planilha.
             if not item.get('aberto_em'):
                 item['aberto_em'] = hoje
             item['fechado_em'] = ''
             item['historico'] = []
-            _ch.anotar(item, f'Chamado aberto em «{_ch.SITUACOES[_ch.SIT_PADRAO][0]}»', quem=quem)
+            _ch.anotar(item, f'Chamado aberto em «{_ch.SITUACOES[item["situacao"]][0]}»', quem=quem)
             if item.get('obs'):
                 _ch.anotar(item, item['obs'], quem=quem)
             lista.append(item)
